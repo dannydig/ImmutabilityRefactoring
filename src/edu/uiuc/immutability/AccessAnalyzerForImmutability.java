@@ -44,20 +44,15 @@ public class AccessAnalyzerForImmutability extends ASTVisitor {
 		if (doesParentBindToTargetClass(fieldDecl)) {
 			List modifiers = fieldDecl.modifiers();
 			if (!Flags.isFinal(fieldDecl.getModifiers())) {
-				Modifier finalModifier = astRoot.newModifier(ModifierKeyword.FINAL_KEYWORD);
-				//finalModifier.getFlags();
-				//modifiers.add(finalModifier);
 				int finalModifiers = fieldDecl.getModifiers() | ModifierKeyword.FINAL_KEYWORD.toFlagValue();
 				TextEditGroup gd = new TextEditGroup("change to final");
 				ModifierRewrite.create(rewriter, fieldDecl).setModifiers(finalModifiers, gd);
-				//ModifierRewrite.create(rewriter, fieldDecl).setVisibility(Modifier.PRIVATE, gd);
-				//ModifierRewrite.create(rewriter, fieldDecl).copyAllModifiers(fieldDecl, gd);
 				groupDescriptions.add(gd);
 			}
 		}
 		return false;
 	}
-
+	
 	private boolean doesParentBindToTargetClass(FieldDeclaration fieldDecl) {
 		ASTNode parent = ASTNodes.getParent(fieldDecl, TypeDeclaration.class);
 		if (parent != null) {
