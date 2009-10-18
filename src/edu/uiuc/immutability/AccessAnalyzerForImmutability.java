@@ -59,7 +59,6 @@ public class AccessAnalyzerForImmutability extends ASTVisitor {
 		groupDescriptions = new ArrayList<TextEditGroup>();
 	}
 	
-	@SuppressWarnings("unchecked")
 	@Override
 	public boolean visit(FieldDeclaration fieldDecl) {
 		if (doesParentBindToTargetClass(fieldDecl)) {
@@ -76,7 +75,6 @@ public class AccessAnalyzerForImmutability extends ASTVisitor {
 			Type fieldDeclType = fieldDecl.getType(); 
 			List fragments = fieldDecl.fragments();
 			for (Object obj : fragments) {
-				
 				VariableDeclarationFragment frag = (VariableDeclarationFragment)obj;
 				if (frag != null && frag.getInitializer() == null) {
 					VariableDeclarationFragment newFrag =
@@ -84,50 +82,8 @@ public class AccessAnalyzerForImmutability extends ASTVisitor {
 					
 					// Check whether the field is already initialized in a constructor in which case we can't
 					// initialize it a second time at the declaration point
-					// Get the class of the variable (The grandparent of a field variable must always be its class)
-					boolean isAlreadyInitialized = false;
-					TypeDeclaration parentClass = (TypeDeclaration)fieldDecl.getParent();
-					assert parentClass.isInterface() == false; //Interfaces can't have non-static fields
-					
-					// Go through all the constructors and check whether they initialize the variable
-					IType classTypeId = unit.getType(parentClass.getName().toString());
-					IField field = classTypeId.getField(frag.getName().toString());
-					
-					IMethod[] methods;
-					try {
-						methods = classTypeId.getMethods();						
-						for (IMethod method : methods) {
-							if (method.isConstructor()) {
-								SearchPattern pattern = SearchPattern.createPattern(field, IJavaSearchConstants.WRITE_ACCESSES);
-								SearchEngine engine = new SearchEngine();
-								SearchParticipant[] participants = new SearchParticipant[] { SearchEngine.getDefaultSearchParticipant() };
-								IJavaSearchScope scope = SearchEngine.createJavaSearchScope(new IJavaElement[] { method });
-								
-								final List matches = new ArrayList();
-								SearchRequestor requestor = new SearchRequestor() {
-									public void acceptSearchMatch(SearchMatch match) {
-										matches.add(match);
-									}
-								};
-								
-								engine.search(pattern, participants, scope, requestor, null);
-								if (!matches.isEmpty()) {
-									// Skip over the add initializer step as this variable is already initialized
-									// in a constructor
-									isAlreadyInitialized = true;
-								}
-							}
-						}
-					} catch (JavaModelException e) {
-						// TODO: Trigger error
-						return false;
-					}
-					catch (CoreException e) {
-						// TODO: Trigger error
-						return false;
-					}
-					
-					if (!isAlreadyInitialized) {
+					if ( !isFieldInitializedInConstructor(frag) ) {
+
 						// Add initializer
 						Expression initializer = null;
 						if (fieldDeclType instanceof PrimitiveType) {
@@ -184,6 +140,52 @@ public class AccessAnalyzerForImmutability extends ASTVisitor {
 				}
 			}
 		}
+		return false;
+	}
+	
+	@SuppressWarnings("unchecked")
+	private boolean isFieldInitializedInConstructor(VariableDeclarationFragment frag) {
+		
+		// Get the class of the variable (The grandparent of a field/fragment is always its class)
+		TypeDeclaration parentClass = (TypeDeclaration)frag.getParent().getParent();
+		assert parentClass.isInterface() == false; //Interfaces can't have non-static fields
+		
+		// Go through all the constructors and check whether they initialize the variable
+		IType classTypeId = unit.getType(parentClass.getName().toString());
+		IField field = classTypeId.getField(frag.getName().toString());
+		
+		IMethod[] methods;
+		try {
+			methods = classTypeId.getMethods();						
+			for (IMethod method : methods) {
+				if (method.isConstructor()) {
+					SearchPattern pattern = SearchPattern.createPattern(field, IJavaSearchConstants.WRITE_ACCESSES);
+					SearchEngine engine = new SearchEngine();
+					SearchParticipant[] participants = new SearchParticipant[] { SearchEngine.getDefaultSearchParticipant() };
+					IJavaSearchScope scope = SearchEngine.createJavaSearchScope(new IJavaElement[] { method });
+					
+					final List matches = new ArrayList();
+					SearchRequestor requestor = new SearchRequestor() {
+						public void acceptSearchMatch(SearchMatch match) {
+							matches.add(match);
+						}
+					};
+					
+					engine.search(pattern, participants, scope, requestor, null);
+					if (!matches.isEmpty()) {
+						// Skip over the add initializer step as this variable is already initialized
+						// in a constructor
+						return true;
+					}
+				}
+			}
+		} catch (JavaModelException e) {
+			// TODO: Trigger error
+		}
+		catch (CoreException e) {
+			// TODO: Trigger error
+		}
+		
 		return false;
 	}
 	
