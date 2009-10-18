@@ -76,6 +76,8 @@ public class AccessAnalyzerForImmutability extends ASTVisitor {
 			List fragments = fieldDecl.fragments();
 			for (Object obj : fragments) {
 				VariableDeclarationFragment frag = (VariableDeclarationFragment)obj;
+				
+				// Check whether the field is already initialized
 				if (frag != null && frag.getInitializer() == null) {
 					VariableDeclarationFragment newFrag =
 							(VariableDeclarationFragment)ASTNode.copySubtree(frag.getAST(), frag);
