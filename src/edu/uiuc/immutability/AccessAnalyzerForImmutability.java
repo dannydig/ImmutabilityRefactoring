@@ -38,6 +38,7 @@ import org.eclipse.jdt.internal.corext.dom.ModifierRewrite;
 import org.eclipse.ltk.core.refactoring.RefactoringStatus;
 import org.eclipse.text.edits.TextEditGroup;
 
+@SuppressWarnings("restriction")
 public class AccessAnalyzerForImmutability extends ASTVisitor {
 
 	private RefactoringStatus status;
@@ -58,12 +59,12 @@ public class AccessAnalyzerForImmutability extends ASTVisitor {
 		groupDescriptions = new ArrayList<TextEditGroup>();
 	}
 	
+	@SuppressWarnings("unchecked")
 	@Override
 	public boolean visit(FieldDeclaration fieldDecl) {
 		if (doesParentBindToTargetClass(fieldDecl)) {
 			
 			// Change modifier to final
-			List modifiers = fieldDecl.modifiers();
 			if (!Flags.isFinal(fieldDecl.getModifiers())) {
 				int finalModifiers = fieldDecl.getModifiers() | ModifierKeyword.FINAL_KEYWORD.toFlagValue();
 				TextEditGroup gd = new TextEditGroup("change to final");
@@ -201,6 +202,7 @@ public class AccessAnalyzerForImmutability extends ASTVisitor {
 		return status;
 	}
 	
+	@SuppressWarnings("unchecked")
 	public Collection getGroupDescriptions() {
 		return groupDescriptions;
 	}
