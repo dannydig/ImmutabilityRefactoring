@@ -42,6 +42,7 @@ import org.eclipse.jdt.core.search.SearchRequestor;
 import org.eclipse.jdt.internal.corext.dom.ASTNodes;
 import org.eclipse.jdt.internal.corext.dom.Bindings;
 import org.eclipse.jdt.internal.corext.dom.ModifierRewrite;
+import org.eclipse.jdt.internal.corext.refactoring.structure.ASTNodeSearchUtil;
 import org.eclipse.ltk.core.refactoring.RefactoringStatus;
 import org.eclipse.text.edits.TextEditGroup;
 
@@ -66,6 +67,24 @@ public class AccessAnalyzerForImmutability extends ASTVisitor {
 		groupDescriptions = new ArrayList<TextEditGroup>();
 	}
 	
+	@Override
+	public boolean visit(MethodDeclaration methodDecl) {
+		if (doesParentBindToTargetClass (methodDecl)) {
+			// TODO get lighweight node from heavyweight node
+			// apply search engine
+			//if (positive){
+				// do the rewrite
+			//}
+			
+		}
+		return false;
+	}
+	
+	private boolean doesParentBindToTargetClass(MethodDeclaration node) {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
 	@SuppressWarnings("unchecked")
 	@Override
 	public boolean visit(FieldDeclaration fieldDecl) {
@@ -185,19 +204,7 @@ public class AccessAnalyzerForImmutability extends ASTVisitor {
 				MethodDeclaration methodDecl = methodDecls[i];
 				
 				if (method.isConstructor()) {
-					SearchPattern pattern = SearchPattern.createPattern(field, IJavaSearchConstants.WRITE_ACCESSES);
-					SearchEngine engine = new SearchEngine();
-					SearchParticipant[] participants = new SearchParticipant[] { SearchEngine.getDefaultSearchParticipant() };
-					IJavaSearchScope scope = SearchEngine.createJavaSearchScope(new IJavaElement[] { method });
-					
-					final List matches = new ArrayList();
-					SearchRequestor requestor = new SearchRequestor() {
-						public void acceptSearchMatch(SearchMatch match) {
-							matches.add(match);
-						}
-					};
-					
-					engine.search(pattern, participants, scope, requestor, null);
+					final List matches = getWritesToFieldInMethod(field, method);
 					if (!matches.isEmpty()) {
 						isInitializedInConstructor = true;
 					}
@@ -245,6 +252,24 @@ public class AccessAnalyzerForImmutability extends ASTVisitor {
 		}
 		
 		return false;
+	}
+
+	private List getWritesToFieldInMethod(IField field, IMethod method)
+			throws CoreException {
+		SearchPattern pattern = SearchPattern.createPattern(field, IJavaSearchConstants.WRITE_ACCESSES);
+		SearchEngine engine = new SearchEngine();
+		SearchParticipant[] participants = new SearchParticipant[] { SearchEngine.getDefaultSearchParticipant() };
+		IJavaSearchScope scope = SearchEngine.createJavaSearchScope(new IJavaElement[] { method });
+		
+		final List matches = new ArrayList();
+		SearchRequestor requestor = new SearchRequestor() {
+			public void acceptSearchMatch(SearchMatch match) {
+				matches.add(match);
+			}
+		};
+		
+		engine.search(pattern, participants, scope, requestor, null);
+		return matches;
 	}
 	
 	private boolean doesParentBindToTargetClass(FieldDeclaration fieldDecl) {
