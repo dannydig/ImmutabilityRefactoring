@@ -18,12 +18,15 @@ import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Assignment;
 import org.eclipse.jdt.core.dom.Block;
 import org.eclipse.jdt.core.dom.CharacterLiteral;
+import org.eclipse.jdt.core.dom.ClassInstanceCreation;
+import org.eclipse.jdt.core.dom.ConstructorInvocation;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.ExpressionStatement;
 import org.eclipse.jdt.core.dom.FieldAccess;
 import org.eclipse.jdt.core.dom.FieldDeclaration;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.PrimitiveType;
+import org.eclipse.jdt.core.dom.ReturnStatement;
 import org.eclipse.jdt.core.dom.SimpleName;
 import org.eclipse.jdt.core.dom.SimpleType;
 import org.eclipse.jdt.core.dom.ThisExpression;
@@ -67,22 +70,69 @@ public class AccessAnalyzerForImmutability extends ASTVisitor {
 		groupDescriptions = new ArrayList<TextEditGroup>();
 	}
 	
+	@SuppressWarnings("unchecked")
 	@Override
 	public boolean visit(MethodDeclaration methodDecl) {
-		if (doesParentBindToTargetClass (methodDecl)) {
-			// TODO get lighweight node from heavyweight node
-			// apply search engine
-			//if (positive){
-				// do the rewrite
-			//}
-			
+		if (doesParentBindToTargetClass (methodDecl) && !methodDecl.isConstructor() ) {
+			final FieldWritesVisitor fieldWritesVisitor = new FieldWritesVisitor();
+			methodDecl.accept(fieldWritesVisitor);
+			if (! fieldWritesVisitor.getResults().isEmpty()) {
+				final TextEditGroup editGroup = new TextEditGroup("replace setter with factory method");
+				
+				TypeDeclaration declaringClass = (TypeDeclaration) ASTNodes.getParent(methodDecl, TypeDeclaration.class);
+				String classIdentifier = declaringClass.getName().getIdentifier();
+				SimpleType returnType = astRoot.newSimpleType(astRoot.newName(new String[] {classIdentifier}));
+				
+				Type oldReturnType = methodDecl.getReturnType2();
+				if (oldReturnType == null) {
+					methodDecl.setReturnType2(returnType);
+				}
+				else {
+					rewriter.replace(oldReturnType, returnType, editGroup);					
+				}
+					
+				methodDecl.accept(new ASTVisitor() {
+					public boolean visit(ExpressionStatement exprStatement) {
+						for (ExpressionStatement exprStatementToBeRemoved : fieldWritesVisitor.getExprStatementsToBeRemoved()) {
+							if (exprStatement.equals(exprStatementToBeRemoved)) {
+								rewriter.remove(exprStatement, editGroup);
+							}
+						}
+						
+						return false;
+					}
+				});
+				
+				ClassInstanceCreation returnValue = astRoot.newClassInstanceCreation();
+				returnValue.setType(astRoot.newSimpleType(astRoot.newName(new String[] {classIdentifier})));
+				for (ExpressionStatement exprStatementToBeRemoved : fieldWritesVisitor.getExprStatementsToBeRemoved()) {
+					
+					Assignment assignment = (Assignment) exprStatementToBeRemoved.getExpression();
+					Expression rightHandSide = assignment.getRightHandSide();
+					
+					while (rightHandSide instanceof Assignment) {
+						rightHandSide = ((Assignment)rightHandSide).getRightHandSide();
+					}
+					
+					returnValue.arguments().add(ASTNode.copySubtree(astRoot, rightHandSide));
+				}
+				
+				ReturnStatement returnStatement = astRoot.newReturnStatement();
+				returnStatement.setExpression(returnValue);
+				
+				new String("test");
+				
+				rewriter.getListRewrite(methodDecl.getBody(), Block.STATEMENTS_PROPERTY).insertLast(returnStatement, editGroup);
+				
+				groupDescriptions.add(editGroup);
+			}
 		}
 		return false;
 	}
 	
-	private boolean doesParentBindToTargetClass(MethodDeclaration node) {
-		// TODO Auto-generated method stub
-		return false;
+	private boolean doesParentBindToTargetClass(MethodDeclaration methodDecl) {
+		TypeDeclaration declaringClass = (TypeDeclaration) ASTNodes.getParent(methodDecl, TypeDeclaration.class);
+		return Bindings.equals(declaringClass.resolveBinding(), refactoring.getTargetBinding());
 	}
 
 	@SuppressWarnings("unchecked")
