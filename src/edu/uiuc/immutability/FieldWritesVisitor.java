@@ -14,48 +14,46 @@ import org.eclipse.jdt.core.dom.FieldAccess;
 import org.eclipse.jdt.core.dom.IBinding;
 import org.eclipse.jdt.core.dom.SimpleName;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
+import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
 import org.eclipse.jdt.internal.corext.dom.ASTNodes;
+import org.eclipse.text.edits.TextEditGroup;
 
 public class FieldWritesVisitor extends ASTVisitor {
 	
-	private List<IField> results;
-	private List<ExpressionStatement> exprStatementsToBeRemoved;
+	private List<ExpressionStatement> removedExpressionStatements;
 	
-	public FieldWritesVisitor() {
-		results = new ArrayList<IField>();
-		exprStatementsToBeRemoved = new ArrayList<ExpressionStatement>();
+	private ASTRewrite rewriter;
+	TextEditGroup editGroup;
+	
+	public FieldWritesVisitor(ASTRewrite rewriter, TextEditGroup editGroup) {
+		this.rewriter = rewriter;
+		this.editGroup = editGroup;
+		
+		removedExpressionStatements = new ArrayList<ExpressionStatement>();
 	}
 	
+	@SuppressWarnings("restriction")
 	public boolean visit(Assignment assignment) {
+		SimpleName fieldName = null;
+
 		Expression leftHandSide = assignment.getLeftHandSide();
 		if (leftHandSide instanceof SimpleName) {
-			SimpleName variableName = (SimpleName) leftHandSide;
-			addField(variableName);
+			fieldName = (SimpleName) leftHandSide;
 		} else if (leftHandSide instanceof FieldAccess) {
 			FieldAccess fieldAccess = (FieldAccess) leftHandSide;
-			SimpleName fieldName = fieldAccess.getName();
-			addField(fieldName);
+			fieldName = fieldAccess.getName();
+		}
+		
+		if (fieldName != null) {
+			ExpressionStatement exprStatementToBeRemoved = 
+					(ExpressionStatement) ASTNodes.getParent(fieldName, ExpressionStatement.class);
+			rewriter.remove(exprStatementToBeRemoved, editGroup);
+			removedExpressionStatements.add(exprStatementToBeRemoved);
 		}
 		return true;
 	}
 
-	@SuppressWarnings("restriction")
-	private void addField(SimpleName variableName) {
-		IBinding variableBinding = variableName.resolveBinding();
-		IJavaElement javaElement = variableBinding.getJavaElement();
-		if (javaElement instanceof IField) {
-			results.add((IField)javaElement);
-			ExpressionStatement exprStatementToBeRemoved = 
-					(ExpressionStatement) ASTNodes.getParent(variableName, ExpressionStatement.class);
-			exprStatementsToBeRemoved.add(exprStatementToBeRemoved);
-		}
-	}
-	
-	public List<IField> getResults(){
-		return results;
-	}
-	
-	public List<ExpressionStatement> getExprStatementsToBeRemoved() {
-		return exprStatementsToBeRemoved;
+	public List<ExpressionStatement> getRemovedExpressionStatements() {
+		return removedExpressionStatements;
 	}
 }

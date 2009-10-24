@@ -74,40 +74,35 @@ public class AccessAnalyzerForImmutability extends ASTVisitor {
 	@Override
 	public boolean visit(MethodDeclaration methodDecl) {
 		if (doesParentBindToTargetClass (methodDecl) && !methodDecl.isConstructor() ) {
-			final FieldWritesVisitor fieldWritesVisitor = new FieldWritesVisitor();
+			final TextEditGroup editGroup = new TextEditGroup("replace setter with factory method");
+			
+			// Find and remove assignment expressions
+			final FieldWritesVisitor fieldWritesVisitor = new FieldWritesVisitor(rewriter, editGroup);
 			methodDecl.accept(fieldWritesVisitor);
-			if (! fieldWritesVisitor.getResults().isEmpty()) {
-				final TextEditGroup editGroup = new TextEditGroup("replace setter with factory method");
+			
+			// If we found any then we must convert the function into a factory method by returning an object
+			// of the class type
+			if (! fieldWritesVisitor.getRemovedExpressionStatements().isEmpty()) {
 				
 				TypeDeclaration declaringClass = (TypeDeclaration) ASTNodes.getParent(methodDecl, TypeDeclaration.class);
 				String classIdentifier = declaringClass.getName().getIdentifier();
-				SimpleType returnType = astRoot.newSimpleType(astRoot.newName(new String[] {classIdentifier}));
 				
+				// Replace void return type with an object of this class' type 
+				SimpleType returnType = astRoot.newSimpleType(astRoot.newName(new String[] {classIdentifier}));
 				Type oldReturnType = methodDecl.getReturnType2();
-				if (oldReturnType == null) {
-					methodDecl.setReturnType2(returnType);
-				}
-				else {
+				if (oldReturnType != null) {
 					rewriter.replace(oldReturnType, returnType, editGroup);					
 				}
-					
-				methodDecl.accept(new ASTVisitor() {
-					public boolean visit(ExpressionStatement exprStatement) {
-						for (ExpressionStatement exprStatementToBeRemoved : fieldWritesVisitor.getExprStatementsToBeRemoved()) {
-							if (exprStatement.equals(exprStatementToBeRemoved)) {
-								rewriter.remove(exprStatement, editGroup);
-							}
-						}
-						
-						return false;
-					}
-				});
+				else {
+					methodDecl.setReturnType2(returnType);
+				}
 				
+				// Add return statement returning a newly created object
 				ClassInstanceCreation returnValue = astRoot.newClassInstanceCreation();
 				returnValue.setType(astRoot.newSimpleType(astRoot.newName(new String[] {classIdentifier})));
-				for (ExpressionStatement exprStatementToBeRemoved : fieldWritesVisitor.getExprStatementsToBeRemoved()) {
+				for (ExpressionStatement removedExpressionStatement : fieldWritesVisitor.getRemovedExpressionStatements()) {
 					
-					Assignment assignment = (Assignment) exprStatementToBeRemoved.getExpression();
+					Assignment assignment = (Assignment) removedExpressionStatement.getExpression();
 					Expression rightHandSide = assignment.getRightHandSide();
 					
 					while (rightHandSide instanceof Assignment) {
