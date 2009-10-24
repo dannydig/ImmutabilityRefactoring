@@ -216,13 +216,9 @@ public class AccessAnalyzerForImmutability extends ASTVisitor {
 			SimpleType simpType = (SimpleType)fieldDeclType;
 			assert simpType != null;
 			
-			// NOTE Not sure whether it is a good idea to handle strings unlike other objects
-			initializer = (simpType.getName().toString().equals("String")) 
-			            ? astRoot.newStringLiteral()
-			            : astRoot.newNullLiteral();
+			initializer = astRoot.newNullLiteral();
 		}
 
-		
 		return initializer;
 	}
 	
