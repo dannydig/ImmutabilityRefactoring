@@ -19,7 +19,6 @@ import org.eclipse.jdt.core.dom.Assignment;
 import org.eclipse.jdt.core.dom.Block;
 import org.eclipse.jdt.core.dom.CharacterLiteral;
 import org.eclipse.jdt.core.dom.ClassInstanceCreation;
-import org.eclipse.jdt.core.dom.ConstructorInvocation;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.ExpressionStatement;
 import org.eclipse.jdt.core.dom.FieldAccess;
@@ -29,12 +28,14 @@ import org.eclipse.jdt.core.dom.PrimitiveType;
 import org.eclipse.jdt.core.dom.ReturnStatement;
 import org.eclipse.jdt.core.dom.SimpleName;
 import org.eclipse.jdt.core.dom.SimpleType;
+import org.eclipse.jdt.core.dom.SingleVariableDeclaration;
 import org.eclipse.jdt.core.dom.ThisExpression;
 import org.eclipse.jdt.core.dom.Type;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 import org.eclipse.jdt.core.dom.Modifier.ModifierKeyword;
 import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
+import org.eclipse.jdt.core.dom.rewrite.ListRewrite;
 import org.eclipse.jdt.core.search.IJavaSearchConstants;
 import org.eclipse.jdt.core.search.IJavaSearchScope;
 import org.eclipse.jdt.core.search.SearchEngine;
@@ -45,7 +46,6 @@ import org.eclipse.jdt.core.search.SearchRequestor;
 import org.eclipse.jdt.internal.corext.dom.ASTNodes;
 import org.eclipse.jdt.internal.corext.dom.Bindings;
 import org.eclipse.jdt.internal.corext.dom.ModifierRewrite;
-import org.eclipse.jdt.internal.corext.refactoring.structure.ASTNodeSearchUtil;
 import org.eclipse.ltk.core.refactoring.RefactoringStatus;
 import org.eclipse.text.edits.TextEditGroup;
 
@@ -58,6 +58,7 @@ public class AccessAnalyzerForImmutability extends ASTVisitor {
 	private final ASTRewrite rewriter;
 	private final AST astRoot;
 	private final ICompilationUnit unit;
+	private boolean hasFullConstructor = false;
 	
 	public AccessAnalyzerForImmutability(
 			MakeImmutableRefactoring makeImmutableRefactoring,
@@ -98,8 +99,9 @@ public class AccessAnalyzerForImmutability extends ASTVisitor {
 				}
 				
 				// Add return statement returning a newly created object
-				ClassInstanceCreation returnValue = astRoot.newClassInstanceCreation();
-				returnValue.setType(astRoot.newSimpleType(astRoot.newName(new String[] {classIdentifier})));
+				List<String> types = new ArrayList<String>();
+				ClassInstanceCreation returnObjectCreation = astRoot.newClassInstanceCreation();
+				returnObjectCreation.setType(astRoot.newSimpleType(astRoot.newName(new String[] {classIdentifier})));
 				for (ExpressionStatement removedExpressionStatement : fieldWritesVisitor.getRemovedExpressionStatements()) {
 					
 					Assignment assignment = (Assignment) removedExpressionStatement.getExpression();
@@ -108,21 +110,125 @@ public class AccessAnalyzerForImmutability extends ASTVisitor {
 					while (rightHandSide instanceof Assignment) {
 						rightHandSide = ((Assignment)rightHandSide).getRightHandSide();
 					}
+
+					returnObjectCreation.arguments().add(ASTNode.copySubtree(astRoot, rightHandSide));
+					types.add(rightHandSide.resolveTypeBinding().getName());
+				}
+
+				// Lazily create a constructor that initializes all the fields if one does not excist 
+				if ( !hasFullConstructor ) {
+					if ( !doesClassHaveFullConstructor(declaringClass, types) ) {
+						createFullConstructor(declaringClass);
+					}
 					
-					returnValue.arguments().add(ASTNode.copySubtree(astRoot, rightHandSide));
+					hasFullConstructor = true;
 				}
 				
 				ReturnStatement returnStatement = astRoot.newReturnStatement();
-				returnStatement.setExpression(returnValue);
-				
-				new String("test");
-				
+				returnStatement.setExpression(returnObjectCreation);				
 				rewriter.getListRewrite(methodDecl.getBody(), Block.STATEMENTS_PROPERTY).insertLast(returnStatement, editGroup);
 				
 				groupDescriptions.add(editGroup);
 			}
 		}
 		return false;
+	}
+	
+	@SuppressWarnings("unchecked")
+	private boolean doesClassHaveFullConstructor(TypeDeclaration classDecl, List<String> types) {
+		MethodDeclaration[] methods = classDecl.getMethods();
+		for (MethodDeclaration method : methods) {
+
+			if (method.isConstructor()) {
+				List parameters = method.parameters();
+				if (parameters.size() == types.size() ) {
+					boolean typesEqual = true;
+					
+					for (int i = 0; i < parameters.size(); i++) {
+						SingleVariableDeclaration param = (SingleVariableDeclaration)parameters.get(i);
+						assert param != null;
+						
+						if (!param.getType().toString().equals(types.get(i))) {
+							typesEqual = false;
+							break;
+						}
+					}
+					
+					if (typesEqual) return true;
+				}
+			}
+		}
+		
+		return false;
+	}
+	
+	@SuppressWarnings("unchecked")
+	private void createFullConstructor(TypeDeclaration classDecl) {
+		final TextEditGroup editGroup = new TextEditGroup("creating constructor that initializes all the fields of " +
+		                                                  "the class to use with setters");
+		
+		MethodDeclaration constructor = astRoot.newMethodDeclaration();
+		SimpleName constructorName = astRoot.newSimpleName(classDecl.getName().getIdentifier());
+		constructor.setName(constructorName);
+		constructor.setConstructor(true);
+		constructor.modifiers().add(astRoot.newModifier(ModifierKeyword.PUBLIC_KEYWORD));
+		
+		// Create a body block and a formal parameter list to set each field
+		Block constructorBody = astRoot.newBlock();
+		
+		FieldDeclaration[] fields = classDecl.getFields();
+		for (FieldDeclaration field : fields) {
+			List fragments = field.fragments();
+			for (Object fragObject : fragments) {
+				VariableDeclarationFragment frag = (VariableDeclarationFragment)fragObject;
+				assert frag != null;
+
+				// Add a formal parameter to initialize the field
+				SingleVariableDeclaration parameter = astRoot.newSingleVariableDeclaration();
+				SimpleName parameterName = (SimpleName) ASTNode.copySubtree(astRoot, frag.getName());
+				parameter.setName(parameterName);
+				constructor.parameters().add(parameter);
+				
+				// Initialize the field with the parameter
+				SimpleName parameterNameCopy = (SimpleName) ASTNode.copySubtree(astRoot, parameterName);
+				ExpressionStatement fieldAssignmentStatement = 
+						createFieldAssignmentStatement(field.getType(), frag, parameterNameCopy);
+				constructorBody.statements().add(fieldAssignmentStatement);
+			}
+		}
+		
+		// Add the body to the constructor
+		constructor.setBody(constructorBody);
+
+		addNewConstructorToClass(constructor, classDecl, editGroup);
+		
+		groupDescriptions.add(editGroup);
+	}
+
+	private void addNewConstructorToClass(MethodDeclaration constructor, TypeDeclaration classDecl, final TextEditGroup editGroup) {
+		ListRewrite classDeclarationsRewrite = rewriter.getListRewrite(classDecl, TypeDeclaration.BODY_DECLARATIONS_PROPERTY);
+		
+		// Try to insert the new constructor after the last current constructor
+		MethodDeclaration lastCurrentConstructor = null;
+		MethodDeclaration[] methods = classDecl.getMethods();	
+		for(int i = methods.length-1; i >= 0; --i) {
+			if (methods[i].isConstructor()) {
+				lastCurrentConstructor = methods[i];
+			}
+		}
+		
+		if (lastCurrentConstructor != null) {
+			classDeclarationsRewrite.insertAfter(constructor, lastCurrentConstructor, editGroup);
+		}
+		else {
+			if (methods.length > 0) {
+				// No constructors exist so we insert it before the first method
+				classDeclarationsRewrite.insertBefore(constructor, methods[0], editGroup);
+			}
+			else {
+				classDeclarationsRewrite.insertLast(constructor, editGroup);	
+			}
+		}
 	}
 	
 	private boolean doesParentBindToTargetClass(MethodDeclaration methodDecl) {
@@ -262,22 +368,8 @@ public class AccessAnalyzerForImmutability extends ASTVisitor {
 				for ( MethodDeclaration methodDecl : methodDeclsWithoutInitialization ) {
 					
 					// Create an assignment of the default value to frag in methodDecl
-					Assignment assignment = astRoot.newAssignment();
-					//LHS
-					FieldAccess fieldAccess = astRoot.newFieldAccess();
-					ThisExpression thisExpr = astRoot.newThisExpression();
-					fieldAccess.setExpression(thisExpr);
-					SimpleName fieldName = astRoot.newSimpleName(frag.getName().toString()); 
-					fieldAccess.setName(fieldName);
-					assignment.setLeftHandSide(fieldAccess);
-					//OP
-					assignment.setOperator(Assignment.Operator.ASSIGN);
-					//RHS
 					Expression initializer = createDefaultInitializer(fieldDeclType);
-					assignment.setRightHandSide(initializer);
-					
-					// Wrap the assignment in an assign statement
-					ExpressionStatement assignStmt = astRoot.newExpressionStatement(assignment);
+					ExpressionStatement assignStmt = createFieldAssignmentStatement(fieldDeclType, frag, initializer);
 					
 					// Add the assign statement to the method body
 					rewriter.getListRewrite(methodDecl.getBody(), Block.STATEMENTS_PROPERTY).insertLast(assignStmt, gd);
@@ -293,6 +385,27 @@ public class AccessAnalyzerForImmutability extends ASTVisitor {
 		}
 		
 		return false;
+	}
+
+	private ExpressionStatement createFieldAssignmentStatement(Type fieldDeclType,
+	                                                           VariableDeclarationFragment frag,
+	                                                           Expression assignToExpression) {
+		Assignment assignment = astRoot.newAssignment();
+		//LHS
+		FieldAccess fieldAccess = astRoot.newFieldAccess();
+		ThisExpression thisExpr = astRoot.newThisExpression();
+		fieldAccess.setExpression(thisExpr);
+		SimpleName fieldName = astRoot.newSimpleName(frag.getName().toString()); 
+		fieldAccess.setName(fieldName);
+		assignment.setLeftHandSide(fieldAccess);
+		//OP
+		assignment.setOperator(Assignment.Operator.ASSIGN);
+		//RHS
+		assignment.setRightHandSide(assignToExpression);
+		
+		// Wrap the assignment in an assign statement
+		ExpressionStatement assignStmt = astRoot.newExpressionStatement(assignment);
+		return assignStmt;
 	}
 
 	private List getWritesToFieldInMethod(IField field, IMethod method)
