@@ -2,6 +2,7 @@ package edu.uiuc.immutability;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 
 import org.eclipse.core.runtime.CoreException;
@@ -100,24 +101,75 @@ public class AccessAnalyzerForImmutability extends ASTVisitor {
 				
 				// Add return statement returning a newly created object
 				List<String> types = new ArrayList<String>();
+				FieldDeclaration[] fields = declaringClass.getFields();
 				ClassInstanceCreation returnObjectCreation = astRoot.newClassInstanceCreation();
 				returnObjectCreation.setType(astRoot.newSimpleType(astRoot.newName(new String[] {classIdentifier})));
-				for (ExpressionStatement removedExpressionStatement : fieldWritesVisitor.getRemovedExpressionStatements()) {
-					
-					Assignment assignment = (Assignment) removedExpressionStatement.getExpression();
-					Expression rightHandSide = assignment.getRightHandSide();
-					
-					while (rightHandSide instanceof Assignment) {
-						rightHandSide = ((Assignment)rightHandSide).getRightHandSide();
-					}
+				for (FieldDeclaration field : fields) {
+					List fragments = field.fragments();
+					for (Object fragmentObject : fragments) {
+						VariableDeclarationFragment fragment = (VariableDeclarationFragment) fragmentObject;
+						assert fragment != null;
+						
+						types.add(field.getType().toString());
+						
+						Expression constructorArgumentExpr = null;
+						
+						List<ExpressionStatement> removedExpressionStatements = fieldWritesVisitor.getRemovedExpressionStatements();
+						for (int i = removedExpressionStatements.size()-1; i >= 0; --i) {
+							ExpressionStatement removedExpressionStatement = removedExpressionStatements.get(i);
+							Assignment assignment = (Assignment) removedExpressionStatement.getExpression();
+							
+							Assignment currentAssignment = assignment;
 
-					returnObjectCreation.arguments().add(ASTNode.copySubtree(astRoot, rightHandSide));
-					types.add(rightHandSide.resolveTypeBinding().getName());
+							do {
+								Expression lhs = currentAssignment.getLeftHandSide();
+								Expression rhs = currentAssignment.getRightHandSide();
+								
+								if (lhs instanceof FieldAccess) {
+									FieldAccess accessStmt = (FieldAccess)lhs;
+									lhs = accessStmt.getName();
+								}
+								
+								assert lhs instanceof SimpleName; 
+								SimpleName lhsName = (SimpleName)lhs;
+									
+								if (lhsName.getIdentifier().equals(fragment.getName().getIdentifier()) ) {
+									while (rhs instanceof Assignment) {
+										rhs = ((Assignment)rhs).getRightHandSide();
+									}
+									
+									constructorArgumentExpr = rhs;
+									break;
+								}
+								
+								if (rhs instanceof Assignment) {
+									currentAssignment = (Assignment)rhs; 
+								}
+								else {
+									currentAssignment = null; 
+								}
+							} while( currentAssignment != null );
+						}
+	
+						if ( constructorArgumentExpr == null) {
+							FieldAccess fieldAccessExpression = astRoot.newFieldAccess();
+							
+							ThisExpression thisExpression = astRoot.newThisExpression();
+							fieldAccessExpression.setExpression(thisExpression);
+							
+							SimpleName fieldName = (SimpleName) ASTNode.copySubtree(astRoot, fragment.getName());
+							fieldAccessExpression.setName(fieldName);
+							
+							constructorArgumentExpr = fieldAccessExpression;
+						}
+						
+						returnObjectCreation.arguments().add(ASTNode.copySubtree(astRoot, constructorArgumentExpr));
+					}
 				}
 
-				// Lazily create a constructor that initializes all the fields if one does not excist 
+				// Lazily create a constructor that initializes all the fields if one does not exist 
 				if ( !hasFullConstructor ) {
-					if ( !doesClassHaveFullConstructor(declaringClass, types) ) {
+					if ( !doesClassHaveConstructorWithTypes(declaringClass, types) ) {
 						createFullConstructor(declaringClass);
 					}
 					
@@ -135,7 +187,7 @@ public class AccessAnalyzerForImmutability extends ASTVisitor {
 	}
 	
 	@SuppressWarnings("unchecked")
-	private boolean doesClassHaveFullConstructor(TypeDeclaration classDecl, List<String> types) {
+	private boolean doesClassHaveConstructorWithTypes(TypeDeclaration classDecl, List<String> types) {
 		MethodDeclaration[] methods = classDecl.getMethods();
 		for (MethodDeclaration method : methods) {
 
