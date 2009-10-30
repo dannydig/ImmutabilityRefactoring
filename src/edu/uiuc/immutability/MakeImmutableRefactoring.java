@@ -258,6 +258,10 @@ public class MakeImmutableRefactoring extends Refactoring {
 	public IBinding getTargetBinding() {
 		return targetBinding;
 	}
+
+	public String getClassName() {
+		return targetClass.getElementName();
+	}
 	
 
 }
