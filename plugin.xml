@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.5"?>
+<plugin>
+
+   <extension
+         point="org.eclipse.ui.popupMenus">
+      <objectContribution
+            objectClass="org.eclipse.jdt.core.IType"
+            id="mit.edu.concurrencyRefactorings.contribution1">
+         <menu
+               label="Concurrency Refactorings"
+               path="additions"
+               id="mit.edu.concurrencyRefactorings.menu1">
+            <separator
+                  name="immutability">
+            </separator>
+         </menu>
+         <action
+               label="Make Immutable"
+               class="edu.uiuc.immutability.ui.MakeImmutableAction"
+               menubarPath="mit.edu.concurrencyRefactorings.menu1/immutability"
+               enablesFor="1"
+               id="edu.uiuc.immutability.ui.MakeImmutableAction">
+         </action>
+      </objectContribution>
+
+      <viewerContribution
+         targetID="#CompilationUnitEditorContext"
+         id="mit.edu.concurrencyRefactorings.EditorContribution">
+         <menu
+               label="Concurrency Refactorings"
+               path="additions"
+               id="mit.edu.concurrencyRefactorings.menu2">
+            <separator
+                  name="immutability">
+            </separator>
+         </menu>
+         <action
+             label="Make Immutable"
+             class="edu.uiuc.immutability.ui.MakeImmutableEditorAction"
+             menubarPath="mit.edu.concurrencyRefactorings.menu2/immutability"
+             enablesFor="+"
+             id="mLocal.ID">
+             <selection
+                 class="org.eclipse.jface.text.ITextSelection">
+             </selection>
+         </action>
+      </viewerContribution>
+   </extension>
+
+</plugin>
