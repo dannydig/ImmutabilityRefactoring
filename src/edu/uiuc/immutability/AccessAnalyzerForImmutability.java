@@ -327,7 +327,18 @@ public class AccessAnalyzerForImmutability extends ASTVisitor {
 				
 				groupDescriptions.add(gd);
 			}
+
+			// Change access to private
+			if (!Flags.isPrivate(fieldDecl.getModifiers())) {
+				TextEditGroup gd2 = new TextEditGroup("Change field to private");
+
+				int privateModifiers = fieldDecl.getModifiers() | ModifierKeyword.PRIVATE_KEYWORD.toFlagValue();
+				ModifierRewrite.create(rewriter, fieldDecl).setModifiers(privateModifiers, gd2);
+				
+				groupDescriptions.add(gd2);
+			}
 		}
+
 		return false;
 	}
 	
