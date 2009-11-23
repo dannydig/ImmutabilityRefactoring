@@ -18,13 +18,11 @@ import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.eclipse.jdt.internal.corext.dom.Bindings;
 
 public class ClassMutatorAnalysis extends ASTVisitor {
-	private final ICompilationUnit unit;
 	private final IType targetClass;
 	
 	Map<MethodDeclaration, MethodSummary> mutators;
 	
-	public ClassMutatorAnalysis(ICompilationUnit unit, IType targetClass) {
-		this.unit = unit;
+	public ClassMutatorAnalysis(IType targetClass) {
 		this.targetClass = targetClass;
 	}
 	
