@@ -203,9 +203,10 @@ public class MakeClassImmutableVisitor extends ASTVisitor {
 					// Check whether the field is already initialized
 					if (frag != null && frag.getInitializer() == null) {
 						
-						// Check whether the field is already initialized in a constructor in which case we can't
-						// initialize it a second time at the declaration point
-						if ( !isFieldInitializedInConstructor(fieldDeclType, frag, gd) ) {
+						// If the field is already initialized in a constructor or we have mutators, in which case we 
+						// will have made a new full constructor, we can't initialize it a second time at the 
+						// declaration point
+						if ( !mutatorAnalysis.hasMutators() && !isFieldInitializedInConstructor(fieldDeclType, frag, gd) ) {
 	
 							// Add initializer
 							Expression initializer = rewriteUtil.createDefaultInitializer(fieldDeclType);
