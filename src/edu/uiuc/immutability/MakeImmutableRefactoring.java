@@ -120,20 +120,20 @@ public class MakeImmutableRefactoring extends Refactoring {
 
 				
 				// Rewrite pass
-				MakeClassImmutableVisitor immutableRewriter = 
-						new MakeClassImmutableVisitor(this, unit, rewriter, mutatorAnalysis);
-				root.accept(immutableRewriter);
+				MakeClassImmutableRewriter immutableRewriter = 
+						new MakeClassImmutableRewriter(this, unit, rewriter);
+				immutableRewriter.rewrite(targetClassDeclaration, mutatorAnalysis);
 
 				result.merge(immutableRewriter.getStatus());
 				if (result.hasFatalError()) {
 					fChangeManager.clear();
 					return result;
 				}
-				descriptions.addAll(immutableRewriter.getGroupDescriptions());	
 			}
 			else {
-				if (!owner.equals(unit))
-					createEdits(unit, rewriter, descriptions);				
+				
+				//descriptions.addAll(immutableRewriter.getGroupDescriptions());
+				createEdits(unit, rewriter, descriptions);				
 			}
 			
 			sub.worked(1);
