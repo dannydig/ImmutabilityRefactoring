@@ -48,6 +48,9 @@ import org.eclipse.ltk.core.refactoring.participants.ResourceChangeChecker;
 import org.eclipse.text.edits.MultiTextEdit;
 import org.eclipse.text.edits.TextEditGroup;
 
+import edu.uiuc.immutability.analysis.ClassConstructorAnalysis;
+import edu.uiuc.immutability.analysis.ClassMutatorAnalysis;
+
 
 @SuppressWarnings("restriction")
 public class MakeImmutableRefactoring extends Refactoring {

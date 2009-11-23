@@ -13,7 +13,9 @@ import org.eclipse.jdt.core.dom.rewrite.ListRewrite;
 import org.eclipse.ltk.core.refactoring.RefactoringStatus;
 import org.eclipse.text.edits.TextEditGroup;
 
-import edu.uiuc.immutability.ClassConstructorAnalysis.FullConstructorStatus;
+import edu.uiuc.immutability.analysis.ClassConstructorAnalysis;
+import edu.uiuc.immutability.analysis.ClassMutatorAnalysis;
+import edu.uiuc.immutability.analysis.ClassConstructorAnalysis.FullConstructorStatus;
 
 public class MakeClassImmutableRewriter {
 	private MakeClassImmutableVisitor immutableRewriter;

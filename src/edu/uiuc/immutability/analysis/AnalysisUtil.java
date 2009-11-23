@@ -1,4 +1,4 @@
-package edu.uiuc.immutability;
+package edu.uiuc.immutability.analysis;
 
 import java.util.List;
 

@@ -1,4 +1,4 @@
-package edu.uiuc.immutability;
+package edu.uiuc.immutability.analysis;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -25,7 +25,7 @@ public class ClassConstructorAnalysis extends ASTVisitor {
 	List<Type> fieldTypes;
 	private AnalysisUtil analysisUtil;
 	
-	ClassConstructorAnalysis(TypeDeclaration targetClass) {
+	public ClassConstructorAnalysis(TypeDeclaration targetClass) {
 		fieldTypes = getFieldTypes(targetClass);
 		
 		analysisUtil = new AnalysisUtil();
