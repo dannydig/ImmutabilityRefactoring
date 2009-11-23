@@ -20,15 +20,12 @@ import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.IBinding;
-import org.eclipse.jdt.core.dom.ITypeBinding;
 import org.eclipse.jdt.core.dom.Message;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
-import org.eclipse.jdt.core.dom.rewrite.ImportRewrite;
 import org.eclipse.jdt.core.refactoring.descriptors.JavaRefactoringDescriptor;
 import org.eclipse.jdt.core.search.IJavaSearchConstants;
 import org.eclipse.jdt.core.search.SearchPattern;
-import org.eclipse.jdt.internal.core.util.ASTNodeFinder;
 import org.eclipse.jdt.internal.corext.dom.ASTNodes;
 import org.eclipse.jdt.internal.corext.dom.NodeFinder;
 import org.eclipse.jdt.internal.corext.refactoring.Checks;
@@ -52,6 +49,7 @@ import org.eclipse.text.edits.MultiTextEdit;
 import org.eclipse.text.edits.TextEditGroup;
 
 
+@SuppressWarnings("restriction")
 public class MakeImmutableRefactoring extends Refactoring {
 
 	private static final String refactoringName = "Make Immutable Class";
@@ -66,7 +64,7 @@ public class MakeImmutableRefactoring extends Refactoring {
 		fChangeManager= new TextChangeManager();
 	}
 
-	@SuppressWarnings({ "restriction", "unchecked" })
+	@SuppressWarnings({ "unchecked" })
 	@Override
 	public RefactoringStatus checkFinalConditions(IProgressMonitor pm)
 			throws CoreException, OperationCanceledException {
