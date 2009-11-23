@@ -2,7 +2,6 @@ package edu.uiuc.immutability;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Iterator;
 import java.util.List;
 
 import org.eclipse.core.runtime.CoreException;
@@ -51,7 +50,7 @@ import org.eclipse.ltk.core.refactoring.RefactoringStatus;
 import org.eclipse.text.edits.TextEditGroup;
 
 @SuppressWarnings("restriction")
-public class AccessAnalyzerForImmutability extends ASTVisitor {
+public class MakeClassImmutabilityRewriter extends ASTVisitor {
 
 	private RefactoringStatus status;
 	private List<TextEditGroup> groupDescriptions;
@@ -61,9 +60,10 @@ public class AccessAnalyzerForImmutability extends ASTVisitor {
 	private final ICompilationUnit unit;
 	private boolean hasFullConstructor = false;
 	
-	public AccessAnalyzerForImmutability(
-			MakeImmutableRefactoring makeImmutableRefactoring,
-			ICompilationUnit unit, ASTRewrite rewriter) {
+	
+	public MakeClassImmutabilityRewriter(MakeImmutableRefactoring makeImmutableRefactoring,
+	                                     ICompilationUnit unit,
+	                                     ASTRewrite rewriter) {
 		this.refactoring = makeImmutableRefactoring;
 		this.rewriter = rewriter;
 		this.astRoot = rewriter.getAST();
@@ -471,6 +471,7 @@ public class AccessAnalyzerForImmutability extends ASTVisitor {
 		return assignStmt;
 	}
 
+	@SuppressWarnings("unchecked")
 	private List getWritesToFieldInMethod(IField field, IMethod method)
 			throws CoreException {
 		SearchPattern pattern = SearchPattern.createPattern(field, IJavaSearchConstants.WRITE_ACCESSES);

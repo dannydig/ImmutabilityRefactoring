@@ -110,16 +110,30 @@ public class MakeImmutableRefactoring extends Refactoring {
 				descriptions= new ArrayList();
 			}
 			checkCompileErrors(result, root, unit);
-			AccessAnalyzerForImmutability analyzer= new AccessAnalyzerForImmutability(this, unit, rewriter);
-			root.accept(analyzer);
-			result.merge(analyzer.getStatus());
-			if (result.hasFatalError()) {
-				fChangeManager.clear();
-				return result;
+			
+			// We will perform a different set of analysis and rewrites for the compilation unit containing the
+			// target class and other compilation units
+			if (owner.equals(unit)) {
+				// Analysis pass
+
+				
+				// Rewrite pass
+				MakeClassImmutabilityRewriter immutableRewriter = 
+						new MakeClassImmutabilityRewriter(this, unit, rewriter);
+				root.accept(immutableRewriter);
+
+				result.merge(immutableRewriter.getStatus());
+				if (result.hasFatalError()) {
+					fChangeManager.clear();
+					return result;
+				}
+				descriptions.addAll(immutableRewriter.getGroupDescriptions());	
 			}
-			descriptions.addAll(analyzer.getGroupDescriptions());
-			if (!owner.equals(unit))
-				createEdits(unit, rewriter, descriptions);
+			else {
+				if (!owner.equals(unit))
+					createEdits(unit, rewriter, descriptions);				
+			}
+			
 			sub.worked(1);
 			if (pm.isCanceled())
 				throw new OperationCanceledException();
