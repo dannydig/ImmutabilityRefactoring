@@ -203,8 +203,8 @@ public class MakeClassImmutableVisitor extends ASTVisitor {
 					// Check whether the field is already initialized
 					if (frag != null && frag.getInitializer() == null) {
 						
-						// If the field is already initialized in a constructor or we have mutators, in which case we 
-						// will have made a new full constructor, we can't initialize it a second time at the 
+						// If the field is already initialized in a constructor or we have mutators (in which case we 
+						// will have made new constructors) we can't initialize it a second time at the 
 						// declaration point
 						if ( !mutatorAnalysis.hasMutators() && !isFieldInitializedInConstructor(fieldDeclType, frag, gd) ) {
 	
@@ -215,6 +215,15 @@ public class MakeClassImmutableVisitor extends ASTVisitor {
 							VariableDeclarationFragment newFrag =
 									(VariableDeclarationFragment)ASTNode.copySubtree(astRoot, frag);
 							newFrag.setInitializer(initializer);
+							rewriter.replace(frag, newFrag, gd);
+						}
+					}
+					else {
+						// If we have added a constructor we must make sure the field is not initialized in the declaration
+						if (mutatorAnalysis.hasMutators()) {
+							VariableDeclarationFragment newFrag =
+									(VariableDeclarationFragment)ASTNode.copySubtree(astRoot, frag);
+							newFrag.setInitializer(null);
 							rewriter.replace(frag, newFrag, gd);
 						}
 					}

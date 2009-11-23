@@ -50,7 +50,6 @@ public class MakeClassImmutableRewriter {
 			// Since we are adding a full constructor we must ensure a default constructor exist as it won`t be
 			// created automatically any more
 			if ( !constructorAnalysis.hasDefaultConstructor() ) {
-				System.out.println("YEAH");
 				MethodDeclaration defaultConstructor = rewriteUtil.createDefaultConstructor(targetClass);
 				addNewConstructorToClass(defaultConstructor, targetClass, true);
 			}

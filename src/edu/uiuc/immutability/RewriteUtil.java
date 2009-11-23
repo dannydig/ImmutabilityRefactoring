@@ -136,7 +136,8 @@ public class RewriteUtil {
 				VariableDeclarationFragment frag = (VariableDeclarationFragment)fragObject;
 				assert frag != null;
 
-				Expression initializer = createDefaultInitializer(field.getType());
+				Expression initializer = (frag.getInitializer() != null) ? frag.getInitializer()
+				                                                         : createDefaultInitializer(field.getType());
 				
 				// Initialize the field with the parameter
 				Expression initializerCopy = (Expression) ASTNode.copySubtree(astRoot, initializer);
