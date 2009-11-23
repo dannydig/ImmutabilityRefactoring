@@ -56,7 +56,7 @@ public class MakeImmutableRefactoring extends Refactoring {
 
 	private static final String refactoringName = "Make Immutable Class";
 	private final IType targetClass;
-	private ITypeBinding targetBinding;
+	private TypeDeclaration targetClassDeclaration;
 	private TextChangeManager fChangeManager;
 	private CompilationUnit fRoot;
 	private ASTRewrite fRewriter;
@@ -66,6 +66,7 @@ public class MakeImmutableRefactoring extends Refactoring {
 		fChangeManager= new TextChangeManager();
 	}
 
+	@SuppressWarnings({ "restriction", "unchecked" })
 	@Override
 	public RefactoringStatus checkFinalConditions(IProgressMonitor pm)
 			throws CoreException, OperationCanceledException {
@@ -114,12 +115,15 @@ public class MakeImmutableRefactoring extends Refactoring {
 			// We will perform a different set of analysis and rewrites for the compilation unit containing the
 			// target class and other compilation units
 			if (owner.equals(unit)) {
+				
 				// Analysis pass
+				ClassMutatorAnalysis mutatorAnalysis = new ClassMutatorAnalysis(unit, targetClass);
+				root.accept(mutatorAnalysis);
 
 				
 				// Rewrite pass
-				MakeClassImmutabilityRewriter immutableRewriter = 
-						new MakeClassImmutabilityRewriter(this, unit, rewriter);
+				MakeClassImmutableVisitor immutableRewriter = 
+						new MakeClassImmutableVisitor(this, unit, rewriter, mutatorAnalysis);
 				root.accept(immutableRewriter);
 
 				result.merge(immutableRewriter.getStatus());
@@ -185,8 +189,7 @@ public class MakeImmutableRefactoring extends Refactoring {
 		if (node == null) {
 			return mappingErrorFound(result, node);
 		} else {
-			TypeDeclaration typeDeclaration = ASTNodeSearchUtil.getTypeDeclarationNode(targetClass, fRoot);
-			targetBinding = typeDeclaration.resolveBinding();
+			targetClassDeclaration = ASTNodeSearchUtil.getTypeDeclarationNode(targetClass, fRoot);
 		}
 		fRewriter= ASTRewrite.create(fRoot.getAST());
 		return result;
@@ -270,7 +273,7 @@ public class MakeImmutableRefactoring extends Refactoring {
 	}
 
 	public IBinding getTargetBinding() {
-		return targetBinding;
+		return targetClassDeclaration.resolveBinding();
 	}
 
 	public String getClassName() {

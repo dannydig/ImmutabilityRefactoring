@@ -50,7 +50,7 @@ import org.eclipse.ltk.core.refactoring.RefactoringStatus;
 import org.eclipse.text.edits.TextEditGroup;
 
 @SuppressWarnings("restriction")
-public class MakeClassImmutabilityRewriter extends ASTVisitor {
+public class MakeClassImmutableVisitor extends ASTVisitor {
 
 	private RefactoringStatus status;
 	private List<TextEditGroup> groupDescriptions;
@@ -59,13 +59,16 @@ public class MakeClassImmutabilityRewriter extends ASTVisitor {
 	private final AST astRoot;
 	private final ICompilationUnit unit;
 	private boolean hasFullConstructor = false;
+	private final ClassMutatorAnalysis mutatorAnalysis;
 	
 	
-	public MakeClassImmutabilityRewriter(MakeImmutableRefactoring makeImmutableRefactoring,
+	public MakeClassImmutableVisitor(MakeImmutableRefactoring makeImmutableRefactoring,
 	                                     ICompilationUnit unit,
-	                                     ASTRewrite rewriter) {
+	                                     ASTRewrite rewriter,
+	                                     ClassMutatorAnalysis mutatorAnalysis) {
 		this.refactoring = makeImmutableRefactoring;
 		this.rewriter = rewriter;
+		this.mutatorAnalysis = mutatorAnalysis;
 		this.astRoot = rewriter.getAST();
 		this.unit = unit;
 		status = new RefactoringStatus();
@@ -75,7 +78,7 @@ public class MakeClassImmutabilityRewriter extends ASTVisitor {
 	@SuppressWarnings("unchecked")
 	@Override
 	public boolean visit(MethodDeclaration methodDecl) {
-		if (doesParentBindToTargetClass (methodDecl) && !methodDecl.isConstructor() ) {
+		if ( doesParentBindToTargetClass (methodDecl) && !methodDecl.isConstructor() ) {
 			final TextEditGroup editGroup = new TextEditGroup("replace setter with factory method");
 			
 			// Find and remove assignment expressions
