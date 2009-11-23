@@ -114,15 +114,18 @@ public class MakeImmutableRefactoring extends Refactoring {
 			// target class and other compilation units
 			if (owner.equals(unit)) {
 				
-				// Analysis pass
+				// Analysis passes
 				ClassMutatorAnalysis mutatorAnalysis = new ClassMutatorAnalysis(targetClass);
-				root.accept(mutatorAnalysis);
+				targetClassDeclaration.accept(mutatorAnalysis);
+				
+				ClassConstructorAnalysis constructorAnalysis = new ClassConstructorAnalysis(targetClassDeclaration);
+				targetClassDeclaration.accept(constructorAnalysis);
 
 				
 				// Rewrite pass
 				MakeClassImmutableRewriter immutableRewriter = 
 						new MakeClassImmutableRewriter(this, unit, rewriter);
-				immutableRewriter.rewrite(targetClassDeclaration, mutatorAnalysis);
+				immutableRewriter.rewrite(targetClassDeclaration, mutatorAnalysis, constructorAnalysis);
 
 				result.merge(immutableRewriter.getStatus());
 				if (result.hasFatalError()) {

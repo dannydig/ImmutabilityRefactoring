@@ -5,18 +5,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.eclipse.jdt.core.ICompilationUnit;
 import org.eclipse.jdt.core.IJavaElement;
 import org.eclipse.jdt.core.IType;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Assignment;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.FieldAccess;
-import org.eclipse.jdt.core.dom.IBinding;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.SimpleName;
-import org.eclipse.jdt.core.dom.TypeDeclaration;
-import org.eclipse.jdt.internal.corext.dom.Bindings;
 
 public class ClassMutatorAnalysis extends ASTVisitor {
 	private final IType targetClass;
@@ -49,7 +45,7 @@ public class ClassMutatorAnalysis extends ASTVisitor {
 }
 
 
-/* AST Visitors */
+/* Utility Visitors */
 
 /**
  * Summarizes the field writes in a method 

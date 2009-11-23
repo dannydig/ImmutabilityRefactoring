@@ -59,13 +59,13 @@ public class MakeClassImmutableVisitor extends ASTVisitor {
 	private final AST astRoot;
 	private final ICompilationUnit unit;
 	private final ClassMutatorAnalysis mutatorAnalysis;
-	private final ClassRewriteUtil rewriteUtil;
+	private final RewriteUtil rewriteUtil;
 	
 	public MakeClassImmutableVisitor(MakeImmutableRefactoring makeImmutableRefactoring,
 	                                     ICompilationUnit unit,
 	                                     ASTRewrite rewriter,
 	                                     ClassMutatorAnalysis mutatorAnalysis,
-	                                     ClassRewriteUtil rewriteUtil,
+	                                     RewriteUtil rewriteUtil,
 	                                     List<TextEditGroup> groupDescriptions) {
 		this.refactoring = makeImmutableRefactoring;
 		this.rewriter = rewriter;
@@ -106,7 +106,6 @@ public class MakeClassImmutableVisitor extends ASTVisitor {
 				}
 				
 				// Add return statement returning a newly created object
-				List<String> types = new ArrayList<String>();
 				FieldDeclaration[] fields = declaringClass.getFields();
 				ClassInstanceCreation returnObjectCreation = astRoot.newClassInstanceCreation();
 				returnObjectCreation.setType(astRoot.newSimpleType(astRoot.newName(new String[] {classIdentifier})));
@@ -115,8 +114,6 @@ public class MakeClassImmutableVisitor extends ASTVisitor {
 					for (Object fragmentObject : fragments) {
 						VariableDeclarationFragment fragment = (VariableDeclarationFragment) fragmentObject;
 						assert fragment != null;
-						
-						types.add(field.getType().toString());
 						
 						Expression constructorArgumentExpr = null;
 						
@@ -183,34 +180,6 @@ public class MakeClassImmutableVisitor extends ASTVisitor {
 		return false;
 	}
 	
-	@SuppressWarnings("unchecked")
-	private boolean doesClassHaveConstructorWithTypes(TypeDeclaration classDecl, List<String> types) {
-		MethodDeclaration[] methods = classDecl.getMethods();
-		for (MethodDeclaration method : methods) {
-
-			if (method.isConstructor()) {
-				List parameters = method.parameters();
-				if (parameters.size() == types.size() ) {
-					boolean typesEqual = true;
-					
-					for (int i = 0; i < parameters.size(); i++) {
-						SingleVariableDeclaration param = (SingleVariableDeclaration)parameters.get(i);
-						assert param != null;
-						
-						if (!param.getType().toString().equals(types.get(i))) {
-							typesEqual = false;
-							break;
-						}
-					}
-					
-					if (typesEqual) return true;
-				}
-			}
-		}
-		
-		return false;
-	}
-
 	private boolean doesParentBindToTargetClass(MethodDeclaration methodDecl) {
 		TypeDeclaration declaringClass = (TypeDeclaration) ASTNodes.getParent(methodDecl, TypeDeclaration.class);
 		return Bindings.equals(declaringClass.resolveBinding(), refactoring.getTargetBinding());

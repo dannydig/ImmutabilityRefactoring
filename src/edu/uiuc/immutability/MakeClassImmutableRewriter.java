@@ -13,6 +13,8 @@ import org.eclipse.jdt.core.dom.rewrite.ListRewrite;
 import org.eclipse.ltk.core.refactoring.RefactoringStatus;
 import org.eclipse.text.edits.TextEditGroup;
 
+import edu.uiuc.immutability.ClassConstructorAnalysis.FullConstructorStatus;
+
 public class MakeClassImmutableRewriter {
 	private MakeClassImmutableVisitor immutableRewriter;
 	
@@ -20,7 +22,7 @@ public class MakeClassImmutableRewriter {
 	private final ICompilationUnit unit;
 	private final ASTRewrite rewriter;
 	private final AST astRoot;
-	private final ClassRewriteUtil rewriteUtil;
+	private final RewriteUtil rewriteUtil;
 	private List<TextEditGroup> groupDescriptions;
 
 	
@@ -32,14 +34,16 @@ public class MakeClassImmutableRewriter {
 		this.rewriter = rewriter;
 		this.astRoot = rewriter.getAST();
 		
-		this.rewriteUtil = new ClassRewriteUtil(this.astRoot);
+		this.rewriteUtil = new RewriteUtil(this.astRoot);
 		groupDescriptions = new ArrayList<TextEditGroup>();
 	}
 
-	public void rewrite(TypeDeclaration targetClass, ClassMutatorAnalysis mutatorAnalysis) {
-		
+	public void rewrite(TypeDeclaration targetClass, 
+	                    ClassMutatorAnalysis mutatorAnalysis,
+	                    ClassConstructorAnalysis constructorAnalysis) {
 		// Add a full constructor (if one is needed)
-		if (mutatorAnalysis.hasMutators()) {
+		if (   constructorAnalysis.getFullConstructorStatus() == FullConstructorStatus.HAS_NOT_FULL_CONSTRUCTOR 
+			&& mutatorAnalysis.hasMutators()) {
 			MethodDeclaration constructor = rewriteUtil.createFullConstructor(targetClass);
 			addNewConstructorToClass(constructor, targetClass);
 		}

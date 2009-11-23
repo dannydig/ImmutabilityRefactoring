@@ -22,11 +22,11 @@ import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 import org.eclipse.jdt.core.dom.Modifier.ModifierKeyword;
 
-public class ClassRewriteUtil {
+public class RewriteUtil {
 	
 	private final AST astRoot;
 	
-	public ClassRewriteUtil(AST astRoot) {
+	public RewriteUtil(AST astRoot) {
 		this.astRoot = astRoot;
 	}
 
