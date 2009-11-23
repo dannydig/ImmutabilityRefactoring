@@ -1,6 +1,7 @@
 package edu.uiuc.immutability;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -24,6 +25,8 @@ public class ClassMutatorAnalysis extends ASTVisitor {
 	
 	public ClassMutatorAnalysis(IType targetClass) {
 		this.targetClass = targetClass;
+		
+		mutators = new HashMap<MethodDeclaration, MethodSummary>();
 	}
 	
 	public boolean hasMutators() {
