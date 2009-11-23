@@ -46,8 +46,18 @@ public class MakeClassImmutableRewriter {
 		// Add a full constructor (if one is needed)
 		if (   constructorAnalysis.getFullConstructorStatus() == FullConstructorStatus.HAS_NOT_FULL_CONSTRUCTOR 
 			&& mutatorAnalysis.hasMutators()) {
-			MethodDeclaration constructor = rewriteUtil.createFullConstructor(targetClass);
-			addNewConstructorToClass(constructor, targetClass);
+
+			// Since we are adding a full constructor we must ensure a default constructor exist as it won`t be
+			// created automatically any more
+			if ( !constructorAnalysis.hasDefaultConstructor() ) {
+				System.out.println("YEAH");
+				MethodDeclaration defaultConstructor = rewriteUtil.createDefaultConstructor(targetClass);
+				addNewConstructorToClass(defaultConstructor, targetClass, true);
+			}
+			
+			// Add full constructor
+			MethodDeclaration fullConstructor = rewriteUtil.createFullConstructor(targetClass);
+			addNewConstructorToClass(fullConstructor, targetClass, false);
 		}
 		
 		// Rewrite fields and methods
@@ -69,7 +79,7 @@ public class MakeClassImmutableRewriter {
 	/*************************************************************************/
 	/* Private methods */
 	
-	private void addNewConstructorToClass(MethodDeclaration constructor, TypeDeclaration classDecl) {
+	private void addNewConstructorToClass(MethodDeclaration constructor, TypeDeclaration classDecl, boolean insertFirst) {
 		final TextEditGroup newConstructorEdit = 
 				new TextEditGroup("creating constructor that initializes all the fields of " +
 			                      "the class to use with setters");
@@ -86,7 +96,7 @@ public class MakeClassImmutableRewriter {
 			}
 		}
 		
-		if (lastCurrentConstructor != null) {
+		if (!insertFirst && lastCurrentConstructor != null) {
 			classDeclarationsRewrite.insertAfter(constructor, lastCurrentConstructor, newConstructorEdit);
 		}
 		else {

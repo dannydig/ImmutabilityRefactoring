@@ -97,15 +97,9 @@ public class RewriteUtil {
 	
 	@SuppressWarnings("unchecked")
 	public MethodDeclaration createFullConstructor(TypeDeclaration classDecl) {
-		MethodDeclaration constructor = astRoot.newMethodDeclaration();
-		SimpleName constructorName = astRoot.newSimpleName(classDecl.getName().getIdentifier());
-		constructor.setName(constructorName);
-		constructor.setConstructor(true);
-		constructor.modifiers().add(astRoot.newModifier(ModifierKeyword.PUBLIC_KEYWORD));
+		MethodDeclaration constructor = createEmptyConstructor(classDecl);
 		
-		// Create a body block and a formal parameter list to set each field
-		Block constructorBody = astRoot.newBlock();
-		
+		Block constructorBody = constructor.getBody();
 		FieldDeclaration[] fields = classDecl.getFields();
 		for (FieldDeclaration field : fields) {
 			List fragments = field.fragments();
@@ -120,16 +114,52 @@ public class RewriteUtil {
 				constructor.parameters().add(parameter);
 				
 				// Initialize the field with the parameter
-				SimpleName parameterNameCopy = (SimpleName) ASTNode.copySubtree(astRoot, parameterName);
+				Expression parameterNameCopy = (Expression) ASTNode.copySubtree(astRoot, parameterName);
 				ExpressionStatement fieldAssignmentStatement = 
 						createFieldAssignmentStatement(field.getType(), frag, parameterNameCopy);
 				constructorBody.statements().add(fieldAssignmentStatement);
 			}
 		}
-		
-		// Add the body to the constructor
-		constructor.setBody(constructorBody);
 
+		return constructor;
+	}
+	
+	@SuppressWarnings("unchecked")
+	public MethodDeclaration createDefaultConstructor(TypeDeclaration classDecl) {
+		MethodDeclaration constructor = createEmptyConstructor(classDecl);
+		
+		Block constructorBody = constructor.getBody();
+		FieldDeclaration[] fields = classDecl.getFields();
+		for (FieldDeclaration field : fields) {
+			List fragments = field.fragments();
+			for (Object fragObject : fragments) {
+				VariableDeclarationFragment frag = (VariableDeclarationFragment)fragObject;
+				assert frag != null;
+
+				Expression initializer = createDefaultInitializer(field.getType());
+				
+				// Initialize the field with the parameter
+				Expression initializerCopy = (Expression) ASTNode.copySubtree(astRoot, initializer);
+				ExpressionStatement fieldAssignmentStatement = 
+						createFieldAssignmentStatement(field.getType(), frag, initializerCopy);
+				constructorBody.statements().add(fieldAssignmentStatement);
+			}
+		}
+
+		return constructor;
+	}
+
+	@SuppressWarnings("unchecked")
+	private MethodDeclaration createEmptyConstructor(TypeDeclaration classDecl) {
+		MethodDeclaration constructor = astRoot.newMethodDeclaration();
+		SimpleName constructorName = astRoot.newSimpleName(classDecl.getName().getIdentifier());
+		constructor.setName(constructorName);
+		constructor.setConstructor(true);
+		constructor.modifiers().add(astRoot.newModifier(ModifierKeyword.PUBLIC_KEYWORD));
+		
+		// Create a body block and a formal parameter list to set each field
+		Block constructorBody = astRoot.newBlock();
+		constructor.setBody(constructorBody);
 		return constructor;
 	}
 }

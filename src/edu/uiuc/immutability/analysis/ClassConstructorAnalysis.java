@@ -12,7 +12,8 @@ import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 
 /**
  * Does the following checks on the constructors:
- * - Checks if a full constructor exists (a constructor that initializes all the fields)  
+ * - Checks if a full constructor exists (a constructor that initializes all the fields)
+ * - Checks if a default constructor exists  
  */
 public class ClassConstructorAnalysis extends ASTVisitor {
 	public enum FullConstructorStatus {
@@ -22,6 +23,7 @@ public class ClassConstructorAnalysis extends ASTVisitor {
 	}
 	
 	private FullConstructorStatus fullConstructorStatus = FullConstructorStatus.HAS_NOT_FULL_CONSTRUCTOR;
+	private boolean defaultConstructor = false;
 	List<Type> fieldTypes;
 	private AnalysisUtil analysisUtil;
 	
@@ -35,11 +37,23 @@ public class ClassConstructorAnalysis extends ASTVisitor {
 		return fullConstructorStatus;
 	}
 	
+	public boolean hasDefaultConstructor() {
+		return defaultConstructor;
+	}
 
 	@Override
 	public boolean visit(MethodDeclaration methodDecl) {
-		if (methodDecl.isConstructor() && analysisUtil.doesMethodTakeTypes(methodDecl, fieldTypes)) {
-			fullConstructorStatus = FullConstructorStatus.HAS_FULL_CONSTRUCTOR;
+		if (methodDecl.isConstructor()) {
+			
+			// Is it a full constructor?
+			if (analysisUtil.doesMethodTakeTypes(methodDecl, fieldTypes)) {
+				fullConstructorStatus = FullConstructorStatus.HAS_FULL_CONSTRUCTOR;
+			}
+			
+			// Is it a default constructor?
+			if (analysisUtil.doesMethodTakeTypes(methodDecl, new ArrayList<Type>())) {
+				defaultConstructor = true;
+			}
 		}
 		
 		return false;
