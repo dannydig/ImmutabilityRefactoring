@@ -58,21 +58,24 @@ public class MakeClassImmutableVisitor extends ASTVisitor {
 	private final ASTRewrite rewriter;
 	private final AST astRoot;
 	private final ICompilationUnit unit;
-	private boolean hasFullConstructor = false;
 	private final ClassMutatorAnalysis mutatorAnalysis;
-	
+	private final ClassRewriteUtil rewriteUtil;
 	
 	public MakeClassImmutableVisitor(MakeImmutableRefactoring makeImmutableRefactoring,
 	                                     ICompilationUnit unit,
 	                                     ASTRewrite rewriter,
-	                                     ClassMutatorAnalysis mutatorAnalysis) {
+	                                     ClassMutatorAnalysis mutatorAnalysis,
+	                                     ClassRewriteUtil rewriteUtil,
+	                                     List<TextEditGroup> groupDescriptions) {
 		this.refactoring = makeImmutableRefactoring;
 		this.rewriter = rewriter;
 		this.mutatorAnalysis = mutatorAnalysis;
+		this.rewriteUtil = rewriteUtil;
+		this.groupDescriptions = groupDescriptions;
 		this.astRoot = rewriter.getAST();
 		this.unit = unit;
 		status = new RefactoringStatus();
-		groupDescriptions = new ArrayList<TextEditGroup>();
+		
 	}
 	
 	@SuppressWarnings("unchecked")
@@ -170,15 +173,6 @@ public class MakeClassImmutableVisitor extends ASTVisitor {
 					}
 				}
 
-				// Lazily create a constructor that initializes all the fields if one does not exist 
-				if ( !hasFullConstructor ) {
-					if ( !doesClassHaveConstructorWithTypes(declaringClass, types) ) {
-						createFullConstructor(declaringClass);
-					}
-					
-					hasFullConstructor = true;
-				}
-				
 				ReturnStatement returnStatement = astRoot.newReturnStatement();
 				returnStatement.setExpression(returnObjectCreation);				
 				rewriter.getListRewrite(methodDecl.getBody(), Block.STATEMENTS_PROPERTY).insertLast(returnStatement, editGroup);
@@ -216,76 +210,7 @@ public class MakeClassImmutableVisitor extends ASTVisitor {
 		
 		return false;
 	}
-	
-	@SuppressWarnings("unchecked")
-	private void createFullConstructor(TypeDeclaration classDecl) {
-		final TextEditGroup editGroup = new TextEditGroup("creating constructor that initializes all the fields of " +
-		                                                  "the class to use with setters");
-		
-		MethodDeclaration constructor = astRoot.newMethodDeclaration();
-		SimpleName constructorName = astRoot.newSimpleName(classDecl.getName().getIdentifier());
-		constructor.setName(constructorName);
-		constructor.setConstructor(true);
-		constructor.modifiers().add(astRoot.newModifier(ModifierKeyword.PUBLIC_KEYWORD));
-		
-		// Create a body block and a formal parameter list to set each field
-		Block constructorBody = astRoot.newBlock();
-		
-		FieldDeclaration[] fields = classDecl.getFields();
-		for (FieldDeclaration field : fields) {
-			List fragments = field.fragments();
-			for (Object fragObject : fragments) {
-				VariableDeclarationFragment frag = (VariableDeclarationFragment)fragObject;
-				assert frag != null;
 
-				// Add a formal parameter to initialize the field
-				SingleVariableDeclaration parameter = astRoot.newSingleVariableDeclaration();
-				SimpleName parameterName = (SimpleName) ASTNode.copySubtree(astRoot, frag.getName());
-				parameter.setName(parameterName);
-				constructor.parameters().add(parameter);
-				
-				// Initialize the field with the parameter
-				SimpleName parameterNameCopy = (SimpleName) ASTNode.copySubtree(astRoot, parameterName);
-				ExpressionStatement fieldAssignmentStatement = 
-						createFieldAssignmentStatement(field.getType(), frag, parameterNameCopy);
-				constructorBody.statements().add(fieldAssignmentStatement);
-			}
-		}
-		
-		// Add the body to the constructor
-		constructor.setBody(constructorBody);
-
-		addNewConstructorToClass(constructor, classDecl, editGroup);
-		
-		groupDescriptions.add(editGroup);
-	}
-
-	private void addNewConstructorToClass(MethodDeclaration constructor, TypeDeclaration classDecl, final TextEditGroup editGroup) {
-		ListRewrite classDeclarationsRewrite = rewriter.getListRewrite(classDecl, TypeDeclaration.BODY_DECLARATIONS_PROPERTY);
-		
-		// Try to insert the new constructor after the last current constructor
-		MethodDeclaration lastCurrentConstructor = null;
-		MethodDeclaration[] methods = classDecl.getMethods();	
-		for(int i = methods.length-1; i >= 0; --i) {
-			if (methods[i].isConstructor()) {
-				lastCurrentConstructor = methods[i];
-			}
-		}
-		
-		if (lastCurrentConstructor != null) {
-			classDeclarationsRewrite.insertAfter(constructor, lastCurrentConstructor, editGroup);
-		}
-		else {
-			if (methods.length > 0) {
-				// No constructors exist so we insert it before the first method
-				classDeclarationsRewrite.insertBefore(constructor, methods[0], editGroup);
-			}
-			else {
-				classDeclarationsRewrite.insertLast(constructor, editGroup);	
-			}
-		}
-	}
-	
 	private boolean doesParentBindToTargetClass(MethodDeclaration methodDecl) {
 		TypeDeclaration declaringClass = (TypeDeclaration) ASTNodes.getParent(methodDecl, TypeDeclaration.class);
 		return Bindings.equals(declaringClass.resolveBinding(), refactoring.getTargetBinding());
@@ -317,7 +242,7 @@ public class MakeClassImmutableVisitor extends ASTVisitor {
 						if ( !isFieldInitializedInConstructor(fieldDeclType, frag, gd) ) {
 	
 							// Add initializer
-							Expression initializer = createDefaultInitializer(fieldDeclType);
+							Expression initializer = rewriteUtil.createDefaultInitializer(fieldDeclType);
 							if (initializer == null) continue;
 							
 							VariableDeclarationFragment newFrag =
@@ -343,50 +268,6 @@ public class MakeClassImmutableVisitor extends ASTVisitor {
 		}
 
 		return false;
-	}
-	
-	private Expression createDefaultInitializer(Type fieldDeclType) {
-		Expression initializer = null;
-		
-		if (fieldDeclType instanceof PrimitiveType) {
-			PrimitiveType primType = (PrimitiveType)fieldDeclType;
-			
-			if (primType.getPrimitiveTypeCode() == PrimitiveType.BOOLEAN) {
-				initializer = astRoot.newBooleanLiteral(false);
-			}
-			else if (primType.getPrimitiveTypeCode() == PrimitiveType.CHAR) {
-				CharacterLiteral charLit = astRoot.newCharacterLiteral(); 
-				charLit.setCharValue('\u0000');
-					
-				initializer = charLit;
-			}
-			else if (primType.getPrimitiveTypeCode() == PrimitiveType.FLOAT) {
-				initializer = astRoot.newNumberLiteral("0.0f");
-			}
-			else if (primType.getPrimitiveTypeCode() == PrimitiveType.DOUBLE) {
-				initializer = astRoot.newNumberLiteral("0.0d");
-			}
-			else if (   primType.getPrimitiveTypeCode() == PrimitiveType.INT
-			         || primType.getPrimitiveTypeCode() == PrimitiveType.SHORT
-			         || primType.getPrimitiveTypeCode() == PrimitiveType.BYTE) {
-		 		initializer = astRoot.newNumberLiteral("0");
-			}
-			else if (primType.getPrimitiveTypeCode() == PrimitiveType.LONG) {
-				initializer = astRoot.newNumberLiteral("0L");
-			}
-			else {
-				// Should never happen
-				assert false;
-			}
-		}
-		else if (fieldDeclType instanceof SimpleType) {
-			SimpleType simpType = (SimpleType)fieldDeclType;
-			assert simpType != null;
-			
-			initializer = astRoot.newNullLiteral();
-		}
-
-		return initializer;
 	}
 	
 	@SuppressWarnings("unchecked")
@@ -434,8 +315,9 @@ public class MakeClassImmutableVisitor extends ASTVisitor {
 				for ( MethodDeclaration methodDecl : methodDeclsWithoutInitialization ) {
 					
 					// Create an assignment of the default value to frag in methodDecl
-					Expression initializer = createDefaultInitializer(fieldDeclType);
-					ExpressionStatement assignStmt = createFieldAssignmentStatement(fieldDeclType, frag, initializer);
+					Expression initializer = rewriteUtil.createDefaultInitializer(fieldDeclType);
+					ExpressionStatement assignStmt = 
+							rewriteUtil.createFieldAssignmentStatement(fieldDeclType, frag, initializer);
 					
 					// Add the assign statement to the method body
 					rewriter.getListRewrite(methodDecl.getBody(), Block.STATEMENTS_PROPERTY).insertLast(assignStmt, gd);
@@ -451,27 +333,6 @@ public class MakeClassImmutableVisitor extends ASTVisitor {
 		}
 		
 		return false;
-	}
-
-	private ExpressionStatement createFieldAssignmentStatement(Type fieldDeclType,
-	                                                           VariableDeclarationFragment frag,
-	                                                           Expression assignToExpression) {
-		Assignment assignment = astRoot.newAssignment();
-		//LHS
-		FieldAccess fieldAccess = astRoot.newFieldAccess();
-		ThisExpression thisExpr = astRoot.newThisExpression();
-		fieldAccess.setExpression(thisExpr);
-		SimpleName fieldName = astRoot.newSimpleName(frag.getName().toString()); 
-		fieldAccess.setName(fieldName);
-		assignment.setLeftHandSide(fieldAccess);
-		//OP
-		assignment.setOperator(Assignment.Operator.ASSIGN);
-		//RHS
-		assignment.setRightHandSide(assignToExpression);
-		
-		// Wrap the assignment in an assign statement
-		ExpressionStatement assignStmt = astRoot.newExpressionStatement(assignment);
-		return assignStmt;
 	}
 
 	@SuppressWarnings("unchecked")
@@ -507,10 +368,4 @@ public class MakeClassImmutableVisitor extends ASTVisitor {
 		// TODO Auto-generated method stub
 		return status;
 	}
-	
-	@SuppressWarnings("unchecked")
-	public Collection getGroupDescriptions() {
-		return groupDescriptions;
-	}
-
 }
