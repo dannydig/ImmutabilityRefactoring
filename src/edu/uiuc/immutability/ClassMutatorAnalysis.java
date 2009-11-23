@@ -35,12 +35,13 @@ public class ClassMutatorAnalysis extends ASTVisitor {
 
 	@Override
 	public boolean visit(MethodDeclaration methodDecl) {
-		
-		final MethodSummary methodSummary = new MethodSummary(targetClass);
-		methodDecl.accept(methodSummary);
-		
-		if (methodSummary.hasFieldAssignments()) {
-			mutators.put(methodDecl, methodSummary);
+		if (!methodDecl.isConstructor()) {
+			final MethodSummary methodSummary = new MethodSummary(targetClass);
+			methodDecl.accept(methodSummary);
+			
+			if (methodSummary.hasFieldAssignments()) {
+				mutators.put(methodDecl, methodSummary);
+			}
 		}
 		
 		return false;
