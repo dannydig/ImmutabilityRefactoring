@@ -1,7 +1,10 @@
 package edu.uiuc.immutability;
 
+import java.beans.Statement;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.jdt.core.Flags;
@@ -29,6 +32,7 @@ import org.eclipse.jdt.core.dom.ThisExpression;
 import org.eclipse.jdt.core.dom.Type;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
+import org.eclipse.jdt.core.dom.VariableDeclarationStatement;
 import org.eclipse.jdt.core.dom.Modifier.ModifierKeyword;
 import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
 import org.eclipse.jdt.core.search.IJavaSearchConstants;
@@ -81,19 +85,75 @@ public class MakeClassImmutableVisitor extends ASTVisitor {
 		if ( doesParentBindToTargetClass (methodDecl) && !methodDecl.isConstructor() ) {
 			final TextEditGroup editGroup = new TextEditGroup("replace setter with factory method");
 			
-			// Find and remove assignment expressions
-			final FieldWritesVisitor fieldWritesVisitor = new FieldWritesVisitor(rewriter, editGroup);
-			methodDecl.accept(fieldWritesVisitor);
+			System.out.println(mutatorAnalysis.getFieldAssignments(methodDecl).size());
+			List<SimpleName> fieldAssignments = mutatorAnalysis.getFieldAssignments(methodDecl); 
 			
-			// If we found any then we must convert the function into a factory method by returning an object
-			// of the class type
-			if (! fieldWritesVisitor.getRemovedExpressionStatements().isEmpty()) {
-				
+			// If there are any field assignments in the function then we must introduce temporaries to write these
+			// and then create a new object from the temporaries that we return
+			if (!fieldAssignments.isEmpty()) {
 				TypeDeclaration declaringClass = (TypeDeclaration) ASTNodes.getParent(methodDecl, TypeDeclaration.class);
 				String classIdentifier = declaringClass.getName().getIdentifier();
+				Block methodBody = methodDecl.getBody();
+				SimpleType classType = astRoot.newSimpleType(astRoot.newName(new String[] {classIdentifier}));
 				
-				// Replace void return type with an object of this class' type 
-				SimpleType returnType = astRoot.newSimpleType(astRoot.newName(new String[] {classIdentifier}));
+				
+				/* Create a reference to the new object and set it to this */
+				SimpleName newThis = rewriteUtil.getThisSimpleName();
+				VariableDeclarationFragment newThisFragment = astRoot.newVariableDeclarationFragment();
+				newThisFragment.setName(newThis);
+				ThisExpression oldThis = astRoot.newThisExpression();
+				newThisFragment.setInitializer(oldThis);
+				
+				VariableDeclarationStatement newThisDeclaration = astRoot.newVariableDeclarationStatement(newThisFragment);
+				Type newThisType = (SimpleType) ASTNode.copySubtree(astRoot, classType);
+				newThisDeclaration.setType(newThisType);
+				
+				rewriter.getListRewrite(methodBody, Block.STATEMENTS_PROPERTY).insertFirst(newThisDeclaration, editGroup);
+								
+				
+				/* Replace every write to a field with the creation of a new object */
+				for (SimpleName simpleName : fieldAssignments) {
+					Assignment fieldAssignment = (Assignment) ASTNodes.getParent(simpleName, Assignment.class);
+					assert fieldAssignment != null;
+					
+					List<Expression> arguments = new ArrayList<Expression>();
+					
+					FieldDeclaration[] fields = declaringClass.getFields();
+					for (FieldDeclaration field : fields) {
+						List fragments = field.fragments();
+						for (Object fragmentObject : fragments) {
+							VariableDeclarationFragment fragment = (VariableDeclarationFragment) fragmentObject;
+							assert fragment != null;
+							
+							if (fragment.getName().getIdentifier().equals(simpleName.getIdentifier())) {
+								Expression assignValue = 
+										(Expression) ASTNode.copySubtree(astRoot, fieldAssignment.getRightHandSide()); 
+								arguments.add(assignValue);
+							}
+							else {
+								FieldAccess fieldAccessExpression = astRoot.newFieldAccess();
+								
+								ThisExpression thisExpression = astRoot.newThisExpression();
+								fieldAccessExpression.setExpression(thisExpression);
+								
+								SimpleName fieldName = (SimpleName) ASTNode.copySubtree(astRoot, fragment.getName());
+								fieldAccessExpression.setName(fieldName);
+								
+								arguments.add(fieldAccessExpression);
+							}
+						}
+					}
+					
+					Expression mutateExpression = rewriteUtil.createMutateExpression(classType, arguments);
+					
+					if (fieldAssignment.getParent() instanceof ExpressionStatement ) {
+						rewriter.replace(fieldAssignment, mutateExpression, editGroup);							
+					}
+				}
+				
+				
+				/* Replace void return type with an object of this class' type */ 
+				SimpleType returnType = (SimpleType) ASTNode.copySubtree(astRoot, classType);
 				Type oldReturnType = methodDecl.getReturnType2();
 				if (oldReturnType != null) {
 					rewriter.replace(oldReturnType, returnType, editGroup);					
@@ -102,74 +162,11 @@ public class MakeClassImmutableVisitor extends ASTVisitor {
 					methodDecl.setReturnType2(returnType);
 				}
 				
-				// Add return statement returning a newly created object
-				FieldDeclaration[] fields = declaringClass.getFields();
-				ClassInstanceCreation returnObjectCreation = astRoot.newClassInstanceCreation();
-				returnObjectCreation.setType(astRoot.newSimpleType(astRoot.newName(new String[] {classIdentifier})));
-				for (FieldDeclaration field : fields) {
-					List fragments = field.fragments();
-					for (Object fragmentObject : fragments) {
-						VariableDeclarationFragment fragment = (VariableDeclarationFragment) fragmentObject;
-						assert fragment != null;
-						
-						Expression constructorArgumentExpr = null;
-						
-						List<ExpressionStatement> removedExpressionStatements = fieldWritesVisitor.getRemovedExpressionStatements();
-						for (int i = removedExpressionStatements.size()-1; i >= 0; --i) {
-							ExpressionStatement removedExpressionStatement = removedExpressionStatements.get(i);
-							Assignment assignment = (Assignment) removedExpressionStatement.getExpression();
-							
-							Assignment currentAssignment = assignment;
 
-							do {
-								Expression lhs = currentAssignment.getLeftHandSide();
-								Expression rhs = currentAssignment.getRightHandSide();
-								
-								if (lhs instanceof FieldAccess) {
-									FieldAccess accessStmt = (FieldAccess)lhs;
-									lhs = accessStmt.getName();
-								}
-								
-								assert lhs instanceof SimpleName; 
-								SimpleName lhsName = (SimpleName)lhs;
-									
-								if (lhsName.getIdentifier().equals(fragment.getName().getIdentifier()) ) {
-									while (rhs instanceof Assignment) {
-										rhs = ((Assignment)rhs).getRightHandSide();
-									}
-									
-									constructorArgumentExpr = rhs;
-									break;
-								}
-								
-								if (rhs instanceof Assignment) {
-									currentAssignment = (Assignment)rhs; 
-								}
-								else {
-									currentAssignment = null; 
-								}
-							} while( currentAssignment != null );
-						}
-	
-						if ( constructorArgumentExpr == null) {
-							FieldAccess fieldAccessExpression = astRoot.newFieldAccess();
-							
-							ThisExpression thisExpression = astRoot.newThisExpression();
-							fieldAccessExpression.setExpression(thisExpression);
-							
-							SimpleName fieldName = (SimpleName) ASTNode.copySubtree(astRoot, fragment.getName());
-							fieldAccessExpression.setName(fieldName);
-							
-							constructorArgumentExpr = fieldAccessExpression;
-						}
-						
-						returnObjectCreation.arguments().add(ASTNode.copySubtree(astRoot, constructorArgumentExpr));
-					}
-				}
-
+				/* Add a return statement to the end returning the _this object */
 				ReturnStatement returnStatement = astRoot.newReturnStatement();
-				returnStatement.setExpression(returnObjectCreation);				
-				rewriter.getListRewrite(methodDecl.getBody(), Block.STATEMENTS_PROPERTY).insertLast(returnStatement, editGroup);
+				returnStatement.setExpression(rewriteUtil.getThisSimpleName());				
+				rewriter.getListRewrite(methodBody, Block.STATEMENTS_PROPERTY).insertLast(returnStatement, editGroup);
 				
 				groupDescriptions.add(editGroup);
 			}

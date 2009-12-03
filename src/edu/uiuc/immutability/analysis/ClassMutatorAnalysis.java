@@ -28,6 +28,10 @@ public class ClassMutatorAnalysis extends ASTVisitor {
 	public boolean hasMutators() {
 		return !mutators.isEmpty();
 	}
+	
+	public List<SimpleName> getFieldAssignments(MethodDeclaration method) {
+		return mutators.get(method).getFieldAssignments();
+	}
 
 	@Override
 	public boolean visit(MethodDeclaration methodDecl) {
@@ -52,15 +56,19 @@ public class ClassMutatorAnalysis extends ASTVisitor {
  */
 class MethodSummary extends ASTVisitor {
 	private final IType targetClass;
-	private List<SimpleName> fieldsAssignedTo;
+	private List<SimpleName> fieldAssignments;
 
 	public MethodSummary(IType targetClass) {
 		this.targetClass = targetClass;
-		fieldsAssignedTo = new ArrayList<SimpleName>();
+		fieldAssignments = new ArrayList<SimpleName>();
+	}
+	
+	public List<SimpleName> getFieldAssignments() {
+		return fieldAssignments;
 	}
 
 	public boolean hasFieldAssignments() {
-		return !fieldsAssignedTo.isEmpty();
+		return !fieldAssignments.isEmpty();
 	}
 
 	public boolean visit(Assignment assignment) {
@@ -80,7 +88,7 @@ class MethodSummary extends ASTVisitor {
 		}
 		
 		if (fieldName != null) {
-			fieldsAssignedTo.add(fieldName);
+			fieldAssignments.add(fieldName);
 		}
 		
 		// True because there may be a chain of assignments: i = j = 0;
