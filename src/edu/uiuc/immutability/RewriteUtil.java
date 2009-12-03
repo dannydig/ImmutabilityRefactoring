@@ -7,6 +7,7 @@ import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.Assignment;
 import org.eclipse.jdt.core.dom.Block;
 import org.eclipse.jdt.core.dom.CharacterLiteral;
+import org.eclipse.jdt.core.dom.ClassInstanceCreation;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.ExpressionStatement;
 import org.eclipse.jdt.core.dom.FieldAccess;
@@ -24,10 +25,16 @@ import org.eclipse.jdt.core.dom.Modifier.ModifierKeyword;
 
 public class RewriteUtil {
 	
+	private final String NEW_THIS_NAME = "_this";
+	
 	private final AST astRoot;
 	
 	public RewriteUtil(AST astRoot) {
 		this.astRoot = astRoot;
+	}
+	
+	public SimpleName getThisSimpleName() {
+		return astRoot.newSimpleName(NEW_THIS_NAME);
 	}
 
 	public Expression createDefaultInitializer(Type fieldDeclType) {
@@ -150,6 +157,24 @@ public class RewriteUtil {
 		return constructor;
 	}
 
+	@SuppressWarnings("unchecked")
+	public Expression createMutateExpression(SimpleType classType, List<Expression> arguments) {
+		SimpleType classTypeCopy = (SimpleType) ASTNode.copySubtree(astRoot, classType);
+		ClassInstanceCreation newObject = astRoot.newClassInstanceCreation();
+		newObject.setType(classTypeCopy);
+		
+		for (Expression expression : arguments) {
+			newObject.arguments().add(expression);
+		}
+		
+		Assignment mutationAssignment = astRoot.newAssignment();
+		mutationAssignment.setLeftHandSide((Expression) ASTNode.copySubtree(astRoot, getThisSimpleName()));
+		mutationAssignment.setOperator(Assignment.Operator.ASSIGN);
+		mutationAssignment.setRightHandSide(newObject);
+		
+		return mutationAssignment;
+	}
+	
 	@SuppressWarnings("unchecked")
 	private MethodDeclaration createEmptyConstructor(TypeDeclaration classDecl) {
 		MethodDeclaration constructor = astRoot.newMethodDeclaration();
