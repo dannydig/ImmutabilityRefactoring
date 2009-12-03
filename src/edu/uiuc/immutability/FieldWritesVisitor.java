@@ -50,6 +50,8 @@ public class FieldWritesVisitor extends ASTVisitor {
 			rewriter.remove(exprStatementToBeRemoved, editGroup);
 			removedExpressionStatements.add(exprStatementToBeRemoved);
 		}
+		
+		// True because it may be a chain of assignments (this.i = this.j = 42;)
 		return true;
 	}
 
