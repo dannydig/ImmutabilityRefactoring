@@ -24,14 +24,12 @@ public class MakeImmutableEditorAction implements IEditorActionDelegate{
 	private JavaEditor fEditor;
 	private ITextSelection fTextSelection;
 
-	@Override
 	public void setActiveEditor(IAction action, IEditorPart targetEditor) {
 		if (targetEditor instanceof JavaEditor) {
 			fEditor = (JavaEditor) targetEditor;
 		}
 	}
 
-	@Override
 	public void run(IAction action) {
 		IJavaElement[] elements;
 		try {
@@ -69,7 +67,6 @@ public class MakeImmutableEditorAction implements IEditorActionDelegate{
 		return fEditor.getSite().getShell();
 	}
 
-	@Override
 	public void selectionChanged(IAction action, ISelection selection) {
 		if (selection instanceof ITextSelection) {
 			fTextSelection = (ITextSelection) selection;
