@@ -85,7 +85,6 @@ public class MakeClassImmutableVisitor extends ASTVisitor {
 		if ( doesParentBindToTargetClass (methodDecl) && !methodDecl.isConstructor() ) {
 			final TextEditGroup editGroup = new TextEditGroup("replace setter with factory method");
 			
-			System.out.println(mutatorAnalysis.getFieldAssignments(methodDecl).size());
 			List<SimpleName> fieldAssignments = mutatorAnalysis.getFieldAssignments(methodDecl); 
 			
 			// If there are any field assignments in the function then we must introduce temporaries to write these
