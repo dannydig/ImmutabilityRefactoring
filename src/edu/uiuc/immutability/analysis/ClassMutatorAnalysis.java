@@ -32,6 +32,10 @@ public class ClassMutatorAnalysis extends ASTVisitor {
 	public List<SimpleName> getFieldAssignments(MethodDeclaration method) {
 		return mutators.get(method).getFieldAssignments();
 	}
+	
+	public boolean isMethodAMutator(MethodDeclaration method) {
+		return true;		
+	}
 
 	@Override
 	public boolean visit(MethodDeclaration methodDecl) {
