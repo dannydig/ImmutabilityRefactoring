@@ -80,46 +80,54 @@ public class MakeClassImmutableVisitor extends ASTVisitor {
 	@Override
 	public boolean visit(MethodDeclaration methodDecl) {
 		if (doesParentBindToTargetClass(methodDecl)
-				&& !methodDecl.isConstructor()) {
+				&& !methodDecl.isConstructor()
+				&& mutatorAnalysis.isMethodAMutator(methodDecl)) {
+			boolean referenceCreated = false;
 			final TextEditGroup editGroup = new TextEditGroup(
 					"replace setter with factory method");
 
-			List<SimpleName> fieldAssignments = mutatorAnalysis
-					.getFieldAssignments(methodDecl);
+			/*
+			 * Get some information about the class and the method we are
+			 * dealing with
+			 */
+			TypeDeclaration declaringClass = (TypeDeclaration) ASTNodes
+					.getParent(methodDecl, TypeDeclaration.class);
+			String classIdentifier = declaringClass.getName().getIdentifier();
+			Block methodBody = methodDecl.getBody();
+			SimpleType classType = astRoot.newSimpleType(astRoot
+					.newName(new String[] { classIdentifier }));
+
+			/*
+			 * TODO: if there are any call to a mutator method, create a new
+			 * object and call the method on _this new object
+			 */
+
+			/*
+			 * TODO: if we found a call to a mutator method then create a
+			 * reference to the new object and set it to this
+			 */
+			if (true) {
+				createReferenceToNewObjectAndSetToThis(methodBody, classType,
+						editGroup);
+				referenceCreated = true;
+			}
 
 			/*
 			 * If there are any field assignments in the function then we must
 			 * introduce temporaries to write these and then create a new object
 			 * from the temporaries that we return
 			 */
-			if (!fieldAssignments.isEmpty()) {
-				TypeDeclaration declaringClass = (TypeDeclaration) ASTNodes
-						.getParent(methodDecl, TypeDeclaration.class);
-				String classIdentifier = declaringClass.getName()
-						.getIdentifier();
-				Block methodBody = methodDecl.getBody();
-				SimpleType classType = astRoot.newSimpleType(astRoot
-						.newName(new String[] { classIdentifier }));
+			List<SimpleName> fieldAssignments = mutatorAnalysis
+					.getFieldAssignments(methodDecl);
 
+			if (!fieldAssignments.isEmpty()) {
 				/*
-				 * Create a reference to the new object and set it to this
+				 * Create a reference to the new object and set it to this i.e:
 				 * MyClass _this = this;
 				 */
-				SimpleName newThis = rewriteUtil.getThisSimpleName();
-				VariableDeclarationFragment newThisFragment = astRoot
-						.newVariableDeclarationFragment();
-				newThisFragment.setName(newThis);
-				ThisExpression oldThis = astRoot.newThisExpression();
-				newThisFragment.setInitializer(oldThis);
-
-				VariableDeclarationStatement newThisDeclaration = astRoot
-						.newVariableDeclarationStatement(newThisFragment);
-				Type newThisType = (SimpleType) ASTNode.copySubtree(astRoot,
-						classType);
-				newThisDeclaration.setType(newThisType);
-
-				rewriter.getListRewrite(methodBody, Block.STATEMENTS_PROPERTY)
-						.insertFirst(newThisDeclaration, editGroup);
+				if (!referenceCreated)
+					createReferenceToNewObjectAndSetToThis(methodBody,
+							classType, editGroup);
 
 				/*
 				 * Replace every write to a field with the creation of a new
@@ -190,6 +198,24 @@ public class MakeClassImmutableVisitor extends ASTVisitor {
 			}
 		}
 		return false;
+	}
+
+	private void createReferenceToNewObjectAndSetToThis(Block methodBody,
+			SimpleType classType, TextEditGroup editGroup) {
+		SimpleName newThis = rewriteUtil.getThisSimpleName();
+		VariableDeclarationFragment newThisFragment = astRoot
+				.newVariableDeclarationFragment();
+		newThisFragment.setName(newThis);
+		ThisExpression oldThis = astRoot.newThisExpression();
+		newThisFragment.setInitializer(oldThis);
+
+		VariableDeclarationStatement newThisDeclaration = astRoot
+				.newVariableDeclarationStatement(newThisFragment);
+		Type newThisType = (SimpleType) ASTNode.copySubtree(astRoot, classType);
+		newThisDeclaration.setType(newThisType);
+
+		rewriter.getListRewrite(methodBody, Block.STATEMENTS_PROPERTY)
+				.insertFirst(newThisDeclaration, editGroup);
 	}
 
 	private boolean doesParentBindToTargetClass(MethodDeclaration methodDecl) {
