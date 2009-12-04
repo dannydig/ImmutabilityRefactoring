@@ -19,7 +19,7 @@ import edu.uiuc.immutability.analysis.ClassConstructorAnalysis.FullConstructorSt
 
 public class MakeClassImmutableRewriter {
 	private MakeClassImmutableVisitor immutableRewriter;
-	
+
 	private final MakeImmutableRefactoring makeImmutableRefactoring;
 	private final ICompilationUnit unit;
 	private final ASTRewrite rewriter;
@@ -27,87 +27,91 @@ public class MakeClassImmutableRewriter {
 	private final RewriteUtil rewriteUtil;
 	private List<TextEditGroup> groupDescriptions;
 
-	
-	public MakeClassImmutableRewriter(MakeImmutableRefactoring makeImmutableRefactoring,
-	                                  ICompilationUnit unit, 
-	                                  ASTRewrite rewriter) {
+	public MakeClassImmutableRewriter(
+			MakeImmutableRefactoring makeImmutableRefactoring,
+			ICompilationUnit unit, ASTRewrite rewriter) {
 		this.makeImmutableRefactoring = makeImmutableRefactoring;
 		this.unit = unit;
 		this.rewriter = rewriter;
 		this.astRoot = rewriter.getAST();
-		
+
 		this.rewriteUtil = new RewriteUtil(this.astRoot);
 		groupDescriptions = new ArrayList<TextEditGroup>();
 	}
 
-	public void rewrite(TypeDeclaration targetClass, 
-	                    ClassMutatorAnalysis mutatorAnalysis,
-	                    ClassConstructorAnalysis constructorAnalysis) {
-		// Add a full constructor (if one is needed)
-		if (   constructorAnalysis.getFullConstructorStatus() == FullConstructorStatus.HAS_NOT_FULL_CONSTRUCTOR 
-			&& mutatorAnalysis.hasMutators()) {
+	public void rewrite(TypeDeclaration targetClass,
+			ClassMutatorAnalysis mutatorAnalysis,
+			ClassConstructorAnalysis constructorAnalysis) {
+		// Add a default constructor (if one is needed)
+		if (!constructorAnalysis.hasDefaultConstructor()
+				&& mutatorAnalysis.hasMutators()) {
+			MethodDeclaration defaultConstructor = rewriteUtil
+					.createDefaultConstructor(targetClass);
+			addNewConstructorToClass(defaultConstructor, targetClass, true);
+		}
 
-			// Since we are adding a full constructor we must ensure a default constructor exist as it won`t be
-			// created automatically any more
-			if ( !constructorAnalysis.hasDefaultConstructor() ) {
-				MethodDeclaration defaultConstructor = rewriteUtil.createDefaultConstructor(targetClass);
-				addNewConstructorToClass(defaultConstructor, targetClass, true);
-			}
-			
+		// Add a full constructor (if one is needed)
+		if (constructorAnalysis.getFullConstructorStatus() == FullConstructorStatus.HAS_NOT_FULL_CONSTRUCTOR
+				&& mutatorAnalysis.hasMutators()) {
+
 			// Add full constructor
-			MethodDeclaration fullConstructor = rewriteUtil.createFullConstructor(targetClass);
+			MethodDeclaration fullConstructor = rewriteUtil
+					.createFullConstructor(targetClass);
 			addNewConstructorToClass(fullConstructor, targetClass, false);
 		}
-		
+
 		// Rewrite fields and methods
-		immutableRewriter = new MakeClassImmutableVisitor(makeImmutableRefactoring, unit, rewriter, 
-		                                                  mutatorAnalysis, rewriteUtil, groupDescriptions);
+		immutableRewriter = new MakeClassImmutableVisitor(
+				makeImmutableRefactoring, unit, rewriter, mutatorAnalysis,
+				rewriteUtil, groupDescriptions);
 		targetClass.accept(immutableRewriter);
 	}
 
 	public RefactoringStatus getStatus() {
-		return (immutableRewriter != null) ? immutableRewriter.getStatus(): null;
+		return (immutableRewriter != null) ? immutableRewriter.getStatus()
+				: null;
 	}
-	
+
 	@SuppressWarnings("unchecked")
 	public Collection getGroupDescriptions() {
 		return groupDescriptions;
 	}
-	
-	
+
 	/*************************************************************************/
 	/* Private methods */
-	
-	private void addNewConstructorToClass(MethodDeclaration constructor, TypeDeclaration classDecl, boolean insertFirst) {
-		final TextEditGroup newConstructorEdit = 
-				new TextEditGroup("creating constructor that initializes all the fields of " +
-			                      "the class to use with setters");
-		
-		ListRewrite classDeclarationsRewrite = 
-				rewriter.getListRewrite(classDecl, TypeDeclaration.BODY_DECLARATIONS_PROPERTY);
-		
+
+	private void addNewConstructorToClass(MethodDeclaration constructor,
+			TypeDeclaration classDecl, boolean insertFirst) {
+		final TextEditGroup newConstructorEdit = new TextEditGroup(
+				"creating constructor that initializes all the fields of "
+						+ "the class to use with setters");
+
+		ListRewrite classDeclarationsRewrite = rewriter.getListRewrite(
+				classDecl, TypeDeclaration.BODY_DECLARATIONS_PROPERTY);
+
 		// Try to insert the new constructor after the last current constructor
 		MethodDeclaration lastCurrentConstructor = null;
-		MethodDeclaration[] methods = classDecl.getMethods();	
-		for(int i = methods.length-1; i >= 0; --i) {
+		MethodDeclaration[] methods = classDecl.getMethods();
+		for (int i = methods.length - 1; i >= 0; --i) {
 			if (methods[i].isConstructor()) {
 				lastCurrentConstructor = methods[i];
 			}
 		}
-		
+
 		if (!insertFirst && lastCurrentConstructor != null) {
-			classDeclarationsRewrite.insertAfter(constructor, lastCurrentConstructor, newConstructorEdit);
-		}
-		else {
+			classDeclarationsRewrite.insertAfter(constructor,
+					lastCurrentConstructor, newConstructorEdit);
+		} else {
 			if (methods.length > 0) {
 				// No constructors exist so we insert it before the first method
-				classDeclarationsRewrite.insertBefore(constructor, methods[0], newConstructorEdit);
-			}
-			else {
-				classDeclarationsRewrite.insertLast(constructor, newConstructorEdit);	
+				classDeclarationsRewrite.insertBefore(constructor, methods[0],
+						newConstructorEdit);
+			} else {
+				classDeclarationsRewrite.insertLast(constructor,
+						newConstructorEdit);
 			}
 		}
-		
+
 		groupDescriptions.add(newConstructorEdit);
 	}
 }
