@@ -65,7 +65,6 @@ public class MakeImmutableInputPage extends UserInputWizardPage implements
 
 	void handleInputChanged() {
 		RefactoringStatus status= new RefactoringStatus();
-		MakeImmutableRefactoring refactoring= getConvertToParallelArrayRefactoring();
 
 		setPageComplete(!status.hasError());
 		int severity= status.getSeverity();

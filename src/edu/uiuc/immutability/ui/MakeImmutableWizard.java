@@ -22,5 +22,4 @@ public class MakeImmutableWizard extends RefactoringWizard {
 		addPage(new MakeImmutableInputPage("ConvertToParallelArray"));
 
 	}
-
 }
