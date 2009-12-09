@@ -1,12 +1,19 @@
 package edu.uiuc.immutability.analysis;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
+import org.eclipse.core.runtime.IProgressMonitor;
+import org.eclipse.jdt.core.Flags;
 import org.eclipse.jdt.core.IJavaElement;
+import org.eclipse.jdt.core.IMethod;
 import org.eclipse.jdt.core.IType;
+import org.eclipse.jdt.core.JavaModelException;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Assignment;
 import org.eclipse.jdt.core.dom.Expression;
@@ -14,15 +21,80 @@ import org.eclipse.jdt.core.dom.FieldAccess;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.SimpleName;
 
-public class ClassMutatorAnalysis extends ASTVisitor {
+import com.ibm.wala.ipa.callgraph.CallGraph;
+import com.ibm.wala.ipa.callgraph.CallGraphBuilderCancelException;
+import com.ibm.wala.ipa.cha.ClassHierarchyException;
+
+import edu.uiuc.immutability.analysis.WALAwithConfigurationFileAnalysis;
+import edu.uiuc.immutability.analysis.EntrypointData;
+
+public class ClassMutatorAnalysis {
 	private final IType targetClass;
 	
 	Map<MethodDeclaration, MethodSummary> mutators;
+
+	private final IProgressMonitor pm;
 	
-	public ClassMutatorAnalysis(IType targetClass) {
+	public ClassMutatorAnalysis(IType targetClass, IProgressMonitor pm) {
 		this.targetClass = targetClass;
+		this.pm = pm;
 		
 		mutators = new HashMap<MethodDeclaration, MethodSummary>();
+		
+	}
+	
+	public void findMutators() {
+		Set<EntrypointData> entrypoints = new HashSet<EntrypointData>();
+		IMethod[] boundaryMethods = findPublicMethods();
+		for (IMethod iMethod : boundaryMethods) {
+			EntrypointData entrypointData = EntrypointData.createEntrypoint(iMethod);
+			if (entrypointData != null)
+				entrypoints.add(entrypointData);
+		}
+		
+		pm.setTaskName("finding mutator methods");
+		WALAwithConfigurationFileAnalysis analysis;
+		try {
+			analysis = new WALAwithConfigurationFileAnalysis(targetClass.getJavaProject(), pm);
+			analysis.setEntrypoints(entrypoints);
+			
+			analysis.buildCallGraph();
+			CallGraph callGraph = analysis.getCallGraph();
+			System.out.println(callGraph);
+		} catch (ClassHierarchyException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (JavaModelException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IllegalArgumentException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (CallGraphBuilderCancelException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+			
+		
+	}
+	
+	private IMethod[] findPublicMethods() {
+		List<IMethod> publicMethods = new ArrayList<IMethod>();
+		try {
+			IMethod[] allMethods = targetClass.getMethods();
+			for (IMethod iMethod : allMethods) {
+				if (Flags.isPublic(iMethod.getFlags())) {
+					publicMethods.add(iMethod);
+				}
+			}
+		} catch (JavaModelException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		return (IMethod[]) publicMethods.toArray(new IMethod[publicMethods.size()]);
 	}
 	
 	public boolean hasMutators() {
@@ -35,22 +107,22 @@ public class ClassMutatorAnalysis extends ASTVisitor {
 	
 	/* TODO: Implement this method! */
 	public boolean isMethodAMutator(MethodDeclaration method) {
-		return true;		
+		return mutators.keySet().contains(method);
 	}
 
-	@Override
-	public boolean visit(MethodDeclaration methodDecl) {
-		if (!methodDecl.isConstructor()) {
-			final MethodSummary methodSummary = new MethodSummary(targetClass);
-			methodDecl.accept(methodSummary);
-			
-			if (methodSummary.hasFieldAssignments()) {
-				mutators.put(methodDecl, methodSummary);
-			}
-		}
-		
-		return false;
-	}
+	//@Override
+//	public boolean visit(MethodDeclaration methodDecl) {
+//		if (!methodDecl.isConstructor()) {
+//			final MethodSummary methodSummary = new MethodSummary(targetClass);
+//			methodDecl.accept(methodSummary);
+//			
+//			if (methodSummary.hasFieldAssignments()) {
+//				mutators.put(methodDecl, methodSummary);
+//			}
+//		}
+//		
+//		return false;
+//	}
 }
 
 

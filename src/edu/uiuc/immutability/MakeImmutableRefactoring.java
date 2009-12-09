@@ -118,8 +118,8 @@ public class MakeImmutableRefactoring extends Refactoring {
 			if (owner.equals(unit)) {
 				
 				// Analysis passes
-				ClassMutatorAnalysis mutatorAnalysis = new ClassMutatorAnalysis(targetClass);
-				targetClassDeclaration.accept(mutatorAnalysis);
+				ClassMutatorAnalysis mutatorAnalysis = new ClassMutatorAnalysis(targetClass, pm);
+				mutatorAnalysis.findMutators();
 				
 				ClassConstructorAnalysis constructorAnalysis = new ClassConstructorAnalysis(targetClassDeclaration);
 				targetClassDeclaration.accept(constructorAnalysis);

@@ -1,0 +1,11 @@
+java\/awt\/.*
+javax\/swing\/.*
+sun\/awt\/.*
+sun\/swing\/.*
+com\/sun\/.*
+sun\/.*
+apple\/.*
+javax\/.*
+com\/apple\/.*
+org\/eclipse\/.*
+edu\/.*
